@@ -1208,7 +1208,7 @@ const Dbx={loc:null,
  async pkce(){const v=b64url(crypto.getRandomValues(new Uint8Array(48)));try{return{v,ch:b64url(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)))),m:'S256'}}catch(e){return{v,ch:v,m:'plain'}}},
  async connect(manual){const key=this.key();if(!key)return alertBox('Dropbox sync has not been set up in this version of the app yet. Please contact your administrator.','Dropbox');
   const{v,ch,m}=await this.pkce();const state=b64url(crypto.getRandomValues(new Uint8Array(16)));const ru=manual?null:this.redirectUri();
-  const u=new URL(DBX_AUTH);Object.entries({client_id:key,response_type:'code',code_challenge:ch,code_challenge_method:m,token_access_type:'offline',state}).forEach(([k,x])=>u.searchParams.set(k,x));
+  const u=new URL(DBX_AUTH);Object.entries({client_id:key,response_type:'code',code_challenge:ch,code_challenge_method:m,token_access_type:'offline',scope:'account_info.read files.metadata.read files.metadata.write files.content.read files.content.write',state}).forEach(([k,x])=>u.searchParams.set(k,x));
   if(localStorage.getItem('sap.dbx.reauth')){u.searchParams.set('force_reauthentication','true');localStorage.removeItem('sap.dbx.reauth')}
   if(ru){u.searchParams.set('redirect_uri',ru);localStorage.setItem('sap.dbx.pkce',JSON.stringify({v,state,ru,t:Date.now()}));location.href=u.toString();return}
   u.searchParams.delete('state');window.open(u.toString(),'_blank');
@@ -1390,7 +1390,7 @@ function viewDbxAdmin(){const t=Dbx.tok(),loc=Dbx.loc||JSON.parse(localStorage.g
  ${row('Sync state',code(Sync.state+(Sync.msg?' – '+Sync.msg:'')))}${row('Last sync',code(SM&&SM.lastSync?fmtDT(SM.lastSync):'never'))}${row('Pending bundles',code(SM?Object.keys(SM.dirty):[]))}${row('Known remote files',code(SM?Object.keys(SM.revs).length+' data, '+Object.keys(SM.photoRev).length+' photos':''))}${row('Tombstones',code(TOMBS.size))}</dl>
  <div class="form-grid" style="margin-top:14px"><label><span>Override App key on this device (leave empty to use the built-in key)</span><input data-change="dbx-key" value="${esc(lk)}" autocomplete="off" spellcheck="false"></label></div>
  <div class="actions" style="margin-top:14px">${Dbx.connected()?`<button class="btn primary" data-act="dbx-sync">Sync now</button><button class="btn" data-act="dbx-recheck">Re-check folder</button><button class="btn" data-act="dbx-resync">Full re-sync</button><button class="btn" data-act="dbx-backup">Upload full backup</button><button class="btn danger" data-act="dbx-disconnect">Disconnect</button>`:`<button class="btn primary" data-act="dbx-connect">Connect (redirect)</button><button class="btn" data-act="dbx-connect-code">Connect with code</button>`}</div>
- <p class="help">Scopes required: account_info.read, files.metadata.read, files.metadata.write, files.content.read, files.content.write, team_info.read. App type: Scoped access, Full Dropbox.</p></div>`}
+ <p class="help">Scopes required: account_info.read, files.metadata.read, files.metadata.write, files.content.read, files.content.write (no team scopes). App type: Scoped access, Full Dropbox.</p></div>`}
 
 /* ===== Init ===== */
 (async()=>{try{await DB.open();await loadAll();await seed();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{})}catch(e){console.error(e);$('#app').innerHTML=emptyHTML('Storage unavailable','This browser blocked local storage (IndexedDB), e.g. in private mode. '+e.message);return}
