@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b5cab">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Site Audit Pro – Inspection & Snagging (Web)</title>
+<title>Site Inspection – Inspections & Snagging</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b5cab'/%3E%3Cpath d='M9 16l5 5 9-10' stroke='white' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
@@ -158,7 +158,7 @@ code{background:#f1f5f9;padding:1px 5px;border-radius:5px;font-size:12px}
 </style>
 </head>
 <body>
-<header class="topbar"><a class="brand" href="#/"><span class="logo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></span><span>Site Audit Pro<br><small>Inspections · Snagging · Reports</small></span></a>
+<header class="topbar"><a class="brand" href="#/"><span class="logo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></span><span>Site Inspection<br><small>Inspections · Snagging · Reports</small></span></a>
 <button class="sync-pill" id="sync-pill" data-act="sync-pill" hidden><i></i><span>Dropbox</span></button>
 <nav class="topnav"><a href="#/" data-nav="projects"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Projects</a><a href="#/templates" data-nav="templates"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>Templates</a><a href="#/settings" data-nav="settings"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>Settings</a></nav></header>
 <main id="app"><div class="empty">Loading…</div></main>
@@ -872,7 +872,7 @@ function viewSettings(){const st=S.settings;onAfter(async()=>{if(navigator.stora
  <div class="card pad" style="margin-top:16px"><h2 style="margin-top:0;font-size:17px">Backup & restore</h2><p class="muted small">All data (projects, audits, issues, photos, drawings, templates) is stored locally in this browser (IndexedDB). Export a backup regularly or to move data to another device/browser.</p>
  <div class="actions"><button class="btn primary" data-act="backup">${ic('download')} Export backup (.json)</button><label class="btn">${ic('upload')} Import backup<input type="file" accept="application/json,.json" hidden data-change="restore"></label><button class="btn" data-act="csv-all">${ic('download')} Export all issues (CSV)</button><button class="btn danger" data-act="wipe">${ic('trash')} Delete all data</button></div><p class="help" id="storage"></p></div>
  ${dbxSettingsHTML()}
- <p class="help" style="margin-top:16px">Site Audit Pro – browser edition. Works offline; no account or server needed.</p>`}
+ <p class="help" style="margin-top:16px">Site Inspection – browser edition. Works offline; no account or server needed.</p>`}
 const notFound=()=>emptyHTML('Not found','This record no longer exists.',`<a class="btn" href="#/">Back to projects</a>`);
 
 /* ===== Router ===== */
@@ -1172,7 +1172,7 @@ function csvBlob(items){const cols=['Project','Audit','Number','Title','Descript
 /* ===== Backup ===== */
 async function buildBackup(){const data={app:'site-audit-pro-web',version:1,exportedAt:new Date().toISOString(),stores:{}};for(const s of STORES)data.stores[s]=await DB.all(s);return data}
 async function exportBackup(){const done=busy('Preparing backup…');try{const data=await buildBackup();download(`site-audit-pro-backup-${today()}.json`,new Blob([JSON.stringify(data)],{type:'application/json'}));toast('Backup exported')}finally{done()}}
-async function importBackup(file){let data;try{data=JSON.parse(await file.text())}catch(e){return alertBox('Not a valid backup file.')}if(!data||data.app!=='site-audit-pro-web'||!data.stores)return alertBox('This file is not a Site Audit Pro (web) backup.');const st=data.stores;
+async function importBackup(file){let data;try{data=JSON.parse(await file.text())}catch(e){return alertBox('Not a valid backup file.')}if(!data||data.app!=='site-audit-pro-web'||!data.stores)return alertBox('This file is not a Site Inspection backup.');const st=data.stores;
  const mode=await modal({title:'Restore backup',body:`<p style="margin-top:0">Backup from <b>${fmtDT(data.exportedAt)}</b>: ${(st.projects||[]).length} projects, ${(st.audits||[]).length} audits, ${(st.items||[]).length} issues, ${(st.photos||[]).length} photos/drawings, ${(st.templates||[]).length} templates.</p><p><b>Merge</b> adds / updates records by ID. <b>Replace all</b> deletes the current data first.</p>`,buttons:[{label:'Cancel',value:null},{label:'Merge',value:'merge'},{label:'Replace all',value:'replace',cls:'danger'}]});if(!mode)return;
  const done=busy('Restoring…');try{if(mode==='replace')for(const s of STORES)await DB.clear(s);for(const s of STORES){const recs=(st[s]||[]).filter(r=>r&&r.id);if(recs.length)await DB.tx(s,'readwrite',o=>{recs.forEach(r=>o.put(r))})}photoCache.clear();cropCache.clear();await loadAll();await seed();Sync.markAllDirty();toast('Backup restored');location.hash='#/';render()}catch(e){console.error(e);alertBox('Restore failed: '+e.message)}finally{done()}}
 
@@ -1184,8 +1184,8 @@ const DROPBOX_ROOT_FOLDER="/Site Inspection";
 const DROPBOX_TEAM_ID="";
 const ALLOWED_EMAIL_DOMAINS="syden.me";
 const KEY_PLACEHOLDER='YOUR_DROPBOX_APP_KEY';
-const NOACCESS_MSG="You don't have access to the company Site Audit Pro folder. Ask your admin to share it with you.";
-const READONLY_MSG="You only have view access to the company Site Audit Pro folder, so your changes can't be saved to Dropbox. Ask your admin for edit access.";
+const NOACCESS_MSG="You don't have access to the company Site Inspection folder. Ask your admin to share it with you.";
+const READONLY_MSG="You only have view access to the company Site Inspection folder, so your changes can't be saved to Dropbox. Ask your admin for edit access.";
 const DBX_API='https://api.dropboxapi.com/2/',DBX_CONTENT='https://content.dropboxapi.com/2/',DBX_TOKEN='https://api.dropboxapi.com/oauth2/token',DBX_AUTH='https://www.dropbox.com/oauth2/authorize';
 class DbxErr extends Error{constructor(msg,kind='api',status=0){super(msg);this.kind=kind;this.status=status}}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -1218,7 +1218,7 @@ const Dbx={loc:null,
   if(q.get('error')){toast('Dropbox: '+(q.get('error_description')||q.get('error')),4000);return true}
   if(!saved||saved.state!==q.get('state')){alertBox('Dropbox sign-in could not be verified. Please try Connect again.');return true}
   const done=busy('Connecting to Dropbox…');try{await this.exchange(q.get('code'),saved.v,saved.ru)}catch(e){alertBox('Dropbox connection failed: '+e.message)}finally{done()}return true},
- accountProblem(a){if(!a.team)return`Site Audit Pro only works with your company Dropbox account. You signed in with a personal Dropbox account${a.email?' ('+a.email+')':''}. Please connect again and sign in with your work account.`;
+ accountProblem(a){if(!a.team)return`Site Inspection only works with your company Dropbox account. You signed in with a personal Dropbox account${a.email?' ('+a.email+')':''}. Please connect again and sign in with your work account.`;
   if(DROPBOX_TEAM_ID&&a.team.id!==DROPBOX_TEAM_ID)return`The Dropbox account ${a.email||''} belongs to a different team (“${a.team.name||a.team.id}”). Please sign in with your company Dropbox account.`;
   const doms=ALLOWED_EMAIL_DOMAINS.split(',').map(x=>x.trim().toLowerCase().replace(/^@/,'')).filter(Boolean);
   if(doms.length&&!doms.includes(String(a.email||'').split('@').pop().toLowerCase()))return`The Dropbox account ${a.email||''} is not a company account (allowed: ${doms.map(d=>'@'+d).join(', ')}). Please sign in with your work account.`;return null},
