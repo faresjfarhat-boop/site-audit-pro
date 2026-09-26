@@ -189,6 +189,24 @@ body.wl-mode .topnav{display:none}
 .wl-spin{width:28px;height:28px;border:3px solid var(--accl);border-top-color:var(--acc);border-radius:50%;animation:wlspin .8s linear infinite}
 @keyframes wlspin{to{transform:rotate(360deg)}}
 .wl-foot{text-align:center}.wl-skip{appearance:none;background:none;border:0;color:var(--acc);font:inherit;font-weight:600;font-size:15px;padding:10px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+/* AI assistant */
+.ai-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:-2px 0 14px;padding:8px 10px;border-radius:10px;background:linear-gradient(90deg,#eef4ff,#f5f0ff);border:1px solid #dbe4ff}
+.ai-lbl{font-size:12.5px;font-weight:700;color:#4338ca;display:inline-flex;align-items:center;gap:5px;margin-right:4px;text-transform:uppercase;letter-spacing:.03em}
+.ai-bar .btn{background:#fff}
+.ai-rec{display:flex;align-items:center;justify-content:center;gap:12px;padding:18px 0 6px}.ai-rec b{font-size:30px;font-variant-numeric:tabular-nums}
+.ai-dot{width:16px;height:16px;border-radius:50%;background:var(--bad);animation:aipulse 1s ease-in-out infinite}
+@keyframes aipulse{50%{opacity:.25;transform:scale(.8)}}
+.ai-sug{display:flex;flex-direction:column;gap:8px;min-width:min(440px,78vw)}
+.ai-conf{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--mut);font-weight:600}.ai-conf .bar{flex:1;height:8px;border-radius:4px;background:#e5e7eb;overflow:hidden}.ai-conf .bar i{display:block;height:100%;background:var(--ok)}.ai-conf.low .bar i{background:var(--warn)}.ai-conf b{color:var(--tx)}
+.ai-warn{margin:0;color:#b45309;font-size:13.5px;font-weight:600}
+.ai-row{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--bd);border-radius:10px;padding:10px 12px;cursor:pointer}
+.ai-row input{width:20px;height:20px;margin:2px 0 0;flex:0 0 auto}.ai-row small{display:block;color:var(--mut);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+.ai-v{font-size:14.5px;line-height:1.4;white-space:pre-wrap}.ai-rep{font-size:12.5px;color:#b45309;margin-top:3px}
+.ai-obs small{color:var(--mut);font-weight:700;font-size:11.5px;text-transform:uppercase}.ai-obs ul{margin:4px 0 0;padding-left:18px;font-size:14px}
+.ai-tr summary{cursor:pointer;color:var(--acc);font-size:13.5px;font-weight:600}.ai-tr p{margin:6px 0 0;font-size:14px;white-space:pre-wrap}
+.ai-note{display:flex;flex-direction:column;gap:6px}.ai-note textarea{width:100%;min-width:min(420px,76vw)}
+.ai-snap{border-color:#c7d2fe;color:#4338ca}
+@media (max-width:760px){.ai-bar .btn{flex:1 1 auto;justify-content:center}}
 
 </style>
 </head>
@@ -899,7 +917,7 @@ function viewProject(id){const p=byId('projects',id);if(!p)return notFound();
 function viewAudit(id,params){const a=byId('audits',id);if(!a)return notFound();const p=byId('projects',a.projectId);const items=auditItems(id);const tab=params.tab||'issues';const cls=S.checklists.filter(c=>c.auditId===id);
  return`${crumbs([['Projects','#/'],[p.name,'#/project/'+p.id],[a.title]])}
  <div class="page-head"><h1>${esc(a.title)}<span class="sub">${fmtDate(a.date)}${a.inspector?' · Inspector: '+esc(a.inspector):''}${a.weather?' · '+esc(a.weather):''}</span></h1>
- <div class="actions"><button class="btn" data-act="edit-audit" data-id="${id}">${ic('edit')}<span class="lbl">Edit</span></button><button class="btn" data-act="report" data-type="audit" data-id="${id}">${ic('file')}<span class="lbl">Report</span></button><button class="btn danger" data-act="del-audit" data-id="${id}">${ic('trash')}</button><button class="btn primary" data-act="new-item" data-id="${id}">${ic('plus')} Add issue</button></div></div>
+ <div class="actions"><button class="btn" data-act="edit-audit" data-id="${id}">${ic('edit')}<span class="lbl">Edit</span></button><button class="btn" data-act="report" data-type="audit" data-id="${id}">${ic('file')}<span class="lbl">Report</span></button><button class="btn danger" data-act="del-audit" data-id="${id}">${ic('trash')}</button>${aiSnapHTML(a)}<button class="btn primary" data-act="new-item" data-id="${id}">${ic('plus')} Add issue</button></div></div>
  ${a.notes?`<div class="card pad small" style="white-space:pre-wrap">${esc(a.notes)}</div>`:''}
  ${statsHTML(items,'a-'+id)}${tradeHTML(items,'a-'+id)}
  <div class="tabs"><a href="#/audit/${id}" class="${tab==='issues'?'on':''}">Issues (${items.length})</a><a href="#/audit/${id}?tab=checklists" class="${tab==='checklists'?'on':''}">Checklists (${cls.length})</a></div>
@@ -917,7 +935,7 @@ function viewItem(id){const i=byId('items',id);if(!i)return notFound();const a=b
  return`${crumbs([['Projects','#/'],[p.name,'#/project/'+p.id],[a.title,'#/audit/'+a.id],['Issue #'+i.number]])}
  <div class="page-head"><h1><span class="num">#${i.number}</span>${esc(i.title||'Untitled issue')}<span class="sub">Created ${fmtDT(i.createdAt)}${i.createdBy?' by '+esc(i.createdBy):''} · Last edited ${fmtDT(i.updatedAt)}${i.updatedBy?' by <b>'+esc(i.updatedBy)+'</b>':''}${i.closedAt&&i.status==='Closed'?' · Closed '+fmtDT(i.closedAt):''}</span></h1>
  <div class="actions">${prev?`<a class="btn" href="#/item/${prev.id}" title="Previous">‹</a>`:''}${next?`<a class="btn" href="#/item/${next.id}" title="Next">›</a>`:''}<button class="btn" data-act="dup-item" data-id="${id}">Duplicate</button><button class="btn danger" data-act="del-item" data-id="${id}">${ic('trash')}</button><button class="btn primary" data-act="new-item" data-id="${a.id}">${ic('plus')} Next issue</button></div></div>
- <div class="two-col"><div class="card pad"><form class="form-grid" onsubmit="return false" id="item-form" data-id="${i.id}">
+ <div class="two-col"><div class="card pad">${aiBarHTML(i)}<form class="form-grid" onsubmit="return false" id="item-form" data-id="${i.id}">
  <label class="full"><span>Title *</span><input name="title" data-change="item-field" value="${esc(i.title)}" placeholder="e.g. Cracked floor tile at entrance"></label>
  <label class="full"><span>Description / notes</span><textarea name="description" data-change="item-field" rows="4" placeholder="Describe the issue and the required action…">${esc(i.description)}</textarea></label>
  <label><span>Status</span><select name="status" data-change="item-field">${STATUSES.map(s=>`<option ${s===i.status?'selected':''}>${s}</option>`).join('')}</select></label>
@@ -933,7 +951,7 @@ function viewItem(id){const i=byId('items',id);if(!i)return notFound();const a=b
  ${dr?`<div class="ph" style="aspect-ratio:1/1;max-width:320px;cursor:pointer" data-act="go" data-href="#/drawing/${dr.id}?focus=${i.id}"><img data-pincrop="${i.id}" alt="" style="object-fit:contain;background:#fff"></div><div class="small" style="margin:8px 0">Pin <b>#${i.number}</b> on <a href="#/drawing/${dr.id}?focus=${i.id}">${esc(dr.name)}</a></div><div class="actions"><button class="btn sm" data-act="place-pin" data-id="${i.id}">Move pin</button><button class="btn sm danger" data-act="unpin" data-id="${i.id}">Remove pin</button></div>`
  :drs.length?`<p class="muted small" style="margin-top:0">Not placed on a drawing yet.</p><button class="btn sm primary" data-act="place-pin" data-id="${i.id}">${ic('pin')} Place on drawing</button>`:`<p class="muted small" style="margin:0">Upload a drawing on the <a href="#/project/${p.id}">project page</a> to pin this issue.</p>`}</div></div></div>
  <div class="section"><h2>Photos (${(i.photos||[]).length})</h2><label class="btn primary sm">${ic('camera')} Take photo<input type="file" accept="image/*" capture="environment" hidden data-change="item-photos" data-id="${id}"></label><label class="btn sm">${ic('upload')} Upload<input type="file" accept="image/*" multiple hidden data-change="item-photos" data-id="${id}"></label></div>
- ${(i.photos||[]).length?`<div class="photos">${i.photos.map((ph,n)=>`<div class="ph"><span class="ph-n">${n+1}</span><img data-photo="${ph}" data-act="lightbox" alt=""><div class="ph-act">${n>0?`<button data-act="photo-first" data-id="${id}" data-ph="${ph}" title="Make main photo">★</button>`:''}<button data-act="annotate" data-id="${id}" data-ph="${ph}">${ic('pen')} Annotate</button><button data-act="del-photo" data-id="${id}" data-ph="${ph}">${ic('trash')}</button></div></div>`).join('')}</div>`:`<div class="card empty">No photos yet. Take a photo with the camera or upload from your device.</div>`}`}
+ ${(i.photos||[]).length?`<div class="photos">${i.photos.map((ph,n)=>`<div class="ph"><span class="ph-n">${n+1}</span><img data-photo="${ph}" data-act="lightbox" alt=""><div class="ph-act">${aiPhotoBtn(id,ph)}${n>0?`<button data-act="photo-first" data-id="${id}" data-ph="${ph}" title="Make main photo">★</button>`:''}<button data-act="annotate" data-id="${id}" data-ph="${ph}">${ic('pen')} Annotate</button><button data-act="del-photo" data-id="${id}" data-ph="${ph}">${ic('trash')}</button></div></div>`).join('')}</div>`:`<div class="card empty">No photos yet. Take a photo with the camera or upload from your device.</div>`}`}
 
 function viewDrawing(id,params){const d=byId('drawings',id);if(!d)return notFound();const p=byId('projects',d.projectId);const place=params.place&&byId('items',params.place);
  const pinned=projItems(p.id).filter(i=>i.pin&&i.pin.drawingId===id).sort((a,b)=>a.number-b.number);
@@ -962,7 +980,7 @@ function viewSettings(){const st=S.settings;onAfter(async()=>{if(navigator.stora
  <label class="full"><span>Additional trades (one per line – offered under “Other trades” in the issue form)</span><textarea data-change="setting" name="categories" rows="6">${esc(cats().join('\n'))}</textarea></label></form></div>
  <div class="card pad" style="margin-top:16px"><h2 style="margin-top:0;font-size:17px">Backup & restore</h2><p class="muted small">All data (projects, inspections, issues, photos, drawings, templates) is stored locally in this browser (IndexedDB). Export a backup regularly or to move data to another device/browser.</p>
  <div class="actions"><button class="btn primary" data-act="backup">${ic('download')} Export backup (.json)</button><label class="btn">${ic('upload')} Import backup<input type="file" accept="application/json,.json" hidden data-change="restore"></label><button class="btn" data-act="csv-all">${ic('download')} Export all issues (CSV)</button><button class="btn danger" data-act="wipe">${ic('trash')} Delete all data</button></div><p class="help" id="storage"></p></div>
- ${dbxSettingsHTML()}
+ ${dbxSettingsHTML()}${aiSettingsHTML()}
  <p class="help" style="margin-top:16px">Site Inspection – browser edition. Works offline; no account or server needed.</p>`}
 const notFound=()=>emptyHTML('Not found','This record no longer exists.',`<a class="btn" href="#/">Back to projects</a>`);
 
@@ -993,7 +1011,8 @@ async function editTemplate(t){const txt=t?t.questions.map(q=>(q.section?'# ':''
  const r=await formModal(t?'Edit template':'New template',[{k:'name',label:'Template name',req:true,full:true},{k:'description',label:'Description',full:true},{k:'q',label:'Questions – one per line. Start a line with # to make a section heading.',type:'textarea',rows:14,full:true}],{name:t?.name,description:t?.description,q:txt},{wide:true});if(!r)return;
  const old=t?t.questions:[];const qs=r.q.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{const sec=l.startsWith('#');const text=l.replace(/^#+\s*/,'');const prev=old.find(o=>o.text===text&&!!o.section===sec);return{id:prev?prev.id:uid(),text,...(sec?{section:true}:{})}});
  await save('templates',{...(t||{id:uid()}),name:r.name,description:r.description,questions:qs});toast('Template saved');render()}
-async function addPhotos(it,files){const done=busy('Adding photos…');try{for(const f of files){const r=await resizeImage(await fileToDataURL(f),1600);const p=await putPhoto({id:uid(),...r,createdAt:Date.now()});it.photos=it.photos||[];it.photos.push(p.id)}await save('items',it);toast(`${files.length} photo${files.length>1?'s':''} added`)}catch(e){console.error(e);alertBox('Could not add photo: '+e.message)}finally{done()}render()}
+async function addPhotos(it,files){const wasBlank=!it.title&&!it.category&&!(it.photos||[]).length&&!it.description;const done=busy('Adding photos…');try{for(const f of files){const r=await resizeImage(await fileToDataURL(f),1600);const p=await putPhoto({id:uid(),...r,createdAt:Date.now()});it.photos=it.photos||[];it.photos.push(p.id)}await save('items',it);toast(`${files.length} photo${files.length>1?'s':''} added`)}catch(e){console.error(e);alertBox('Could not add photo: '+e.message)}finally{done()}render();
+ if(wasBlank&&(it.photos||[]).length&&AI.enabled()&&AI.auto())AI.photo(it.id,it.photos[0],{auto:true})}
 let pdfWorkerSet=false;
 async function pdfToImage(file){if(!window.pdfjsLib)throw new Error('PDF support library not available');if(!pdfWorkerSet){const t=$('#pdfjs-worker');if(t&&t.textContent.length>1000)pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([t.textContent],{type:'text/javascript'}));pdfWorkerSet=true}
  const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;let n=1;
@@ -1534,6 +1553,103 @@ Object.assign(ACT,{
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&Dbx.connected()&&Dbx.prefs().autoSync&&Date.now()-(SM.lastSync||0)>60000)Sync.now()});
  setInterval(()=>{if(Dbx.connected()&&Dbx.prefs().autoSync&&document.visibilityState==='visible'&&navigator.onLine)Sync.now();Sync.pill()},180000);setInterval(()=>Sync.pill(),30000);
  if(window.__PWA&&'serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(e=>console.warn('SW',e))})();
+
+/* ===== AI assistant: voice notes, photo analysis, "Snap & detect" – via the Site Inspection AI relay (Cloudflare Worker) =====
+ The relay verifies the Dropbox access token (company team accounts only) and holds the OpenAI key. The app never sees the key.
+ Hidden when AI_RELAY_URL is empty (build constant) or Dropbox is not connected. Suggestions are never applied without Apply. */
+const AI_RELAY_URL="https://site-inspection-relay.syden.workers.dev";
+class AIErr extends Error{constructor(kind,msg){super(msg);this.kind=kind}}
+const AI_ICON={mic:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>',
+ spark:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
+ talk:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg>'};
+const AI={
+ enabled(){return!!AI_RELAY_URL&&Dbx.connected()},
+ canRecord(){return!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder)},
+ auto(){return localStorage.getItem('sap.ai.auto')!=='0'},
+ async call(path,body,headers={}){
+  const OFF="You're offline. AI suggestions need an internet connection – try again when you have signal.";
+  if(!navigator.onLine)throw new AIErr('offline',OFF);
+  let tok;try{tok=await Dbx.token()}catch(e){throw new AIErr(e.kind==='offline'?'offline':'auth',e.kind==='offline'?OFF:'Your Dropbox sign-in has expired. Reconnect Dropbox in Settings to use the AI assistant.')}
+  for(let a=0;a<2;a++){const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),90000);let r;
+   try{r=await fetch(AI_RELAY_URL.replace(/\/+$/,'')+path,{method:'POST',headers:{...headers,Authorization:'Bearer '+tok},body,signal:ctl.signal})}
+   catch(e){throw e.name==='AbortError'?new AIErr('timeout','The AI took too long to respond. Please try again.'):!navigator.onLine?new AIErr('offline',OFF):new AIErr('network','Could not reach the AI service. Check your connection and try again.')}
+   finally{clearTimeout(t)}
+   const j=await r.json().catch(()=>({}));if(r.ok)return j;
+   if(r.status===401&&a===0){try{tok=await Dbx.token(true);continue}catch(e){}}
+   const kind={401:'auth',403:'forbidden',413:'too_large',415:'bad_input',400:'bad_input',429:'rate'}[r.status]||'server';
+   throw new AIErr(kind,j.message||{auth:'Not authorized. Reconnect Dropbox and try again.',forbidden:'The AI assistant is only available to company accounts.',rate:'AI limit reached. Please try again later.',too_large:'That file is too large for the AI assistant.'}[kind]||`The AI service is unavailable right now (${r.status}). Please try again later.`)}},
+ error(e){console.warn('AI',e&&e.kind);const title={offline:'You are offline',auth:'Not authorized',forbidden:'Not authorized',rate:'AI limit reached',mic:'Microphone',timeout:'AI assistant',too_large:'Too large'}[e&&e.kind]||'AI assistant';
+  return alertBox(e&&e.message||'Something went wrong with the AI assistant.',title)},
+ context(it){const a=byId('audits',it.auditId),p=byId('projects',it.projectId);return{location:it.location||'',project:p?p.name:'',inspection:a?a.title:''}},
+ async image(photoId){const p=await getPhoto(photoId);if(!p)throw new AIErr('bad_input','Photo not found on this device yet.');return(await resizeImage(p.data,1024,'image/jpeg',0.8)).data},
+ analyze(o){return this.call('/analyze',JSON.stringify({images:o.images||[],text:o.text||'',taxonomy:TAXONOMY,context:o.context||{}}),{'Content-Type':'application/json'})},
+ async transcribe(rec){const fd=new FormData();const ext=/mp4|m4a|aac/.test(rec.type)?'m4a':/ogg/.test(rec.type)?'ogg':/wav/.test(rec.type)?'wav':'webm';
+  fd.append('file',rec.blob,'voice-note.'+ext);const lang=(navigator.language||'').slice(0,2).toLowerCase();if(/^[a-z]{2}$/.test(lang))fd.append('language',lang);
+  return(await this.call('/transcribe',fd)).text||''},
+ /* Record audio with MediaRecorder: webm/opus (Chrome/Android/Firefox) or mp4/aac (iOS Safari). Resolves {blob,type} or null if cancelled. */
+ async record(title='Voice note',hint='Speak now – tap Stop when you are done.'){
+  if(!this.canRecord())throw new AIErr('mic','Voice recording is not supported in this browser.');
+  let stream;try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}})}
+  catch(e){throw new AIErr('mic',e&&e.name==='NotAllowedError'?'Microphone access was blocked. Allow the microphone for this site in your browser settings, then try again.':e&&e.name==='NotFoundError'?'No microphone was found on this device.':'Could not start the microphone: '+(e&&e.message||e))}
+  const mime=['audio/webm;codecs=opus','audio/webm','audio/mp4;codecs=mp4a.40.2','audio/mp4','audio/aac','audio/ogg;codecs=opus'].find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t));
+  let rec;try{rec=new MediaRecorder(stream,mime?{mimeType:mime,audioBitsPerSecond:64000}:undefined)}catch(e){rec=new MediaRecorder(stream)}
+  const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};const stopped=new Promise(r=>rec.onstop=r);
+  const MAX=180,t0=Date.now();rec.start(1000);let tm;
+  const v=await modal({title,body:`<div class="ai-rec"><span class="ai-dot"></span><b id="ai-rec-t">0:00</b></div><p class="help" style="text-align:center;margin:8px 0 0">${esc(hint)} (max ${MAX/60} min)</p>`,
+   buttons:[{label:'Cancel',value:null},{label:'Stop',value:'stop',cls:'primary'}],
+   onOpen:(el,close)=>{tm=setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000),x=el.querySelector('#ai-rec-t');if(x)x.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');if(s>=MAX)close('stop')},250)}});
+  clearInterval(tm);if(rec.state!=='inactive')rec.stop();await stopped;stream.getTracks().forEach(t=>t.stop());
+  if(v!=='stop')return null;const type=(rec.mimeType||mime||'audio/mp4').split(';')[0];const blob=new Blob(chunks,{type});
+  if(Date.now()-t0<800||blob.size<500)throw new AIErr('mic','The recording was too short. Hold on a moment longer before tapping Stop.');return{blob,type}},
+ /* Show a suggestion; the user picks what to apply. Never overwrites without an explicit, visible choice. */
+ async suggest(it,s,opt={}){const T=taxTrades(),okTrade=T.includes(s.trade),okSub=okTrade&&taxSubs(s.trade).includes(s.subcategory),pc=Math.round((+s.confidence||0)*100);
+  const cls=okTrade?[s.trade,okSub?s.subcategory:'',okSub?s.defectType:''].filter(Boolean):[],curCls=clsParts(it);
+  const row=(k,label,val,cur,checked,note)=>`<label class="ai-row"><input type="checkbox" name="${k}" ${checked?'checked':''}><div><small>${label}</small><div class="ai-v">${val}</div>${note||''}</div></label>`;
+  const rep=c=>`<div class="ai-rep">Currently: ${esc(c)} – tick to replace</div>`;
+  const body=`<div class="ai-sug">${opt.auto?`<p class="help" style="margin:0 0 8px">${AI_ICON.spark} The AI looked at your new photo. Review before applying.</p>`:''}
+   <div class="ai-conf ${pc<50?'low':''}"><span>Confidence</span><div class="bar"><i style="width:${pc}%"></i></div><b>${pc}%</b></div>${pc<50?`<p class="ai-warn">Low confidence – check carefully.</p>`:''}
+   ${cls.length?row('cls','Trade › Subcategory › Defect',esc(cls.join(' › ')),curCls,!curCls.length,curCls.length?rep(curCls.join(' › ')):''):`<p class="ai-warn">No matching trade in the list – choose the classification manually.</p>`}
+   ${s.title?row('title','Title',esc(s.title),it.title,!it.title,it.title?rep(it.title):''):''}
+   ${s.description?row('desc','Description',esc(s.description),it.description,true,it.description?'<div class="ai-rep">Will be added below the current description</div>':''):''}
+   ${(s.otherObservations||[]).length?`<div class="ai-obs"><small>Other observations</small><ul>${s.otherObservations.map(o=>`<li>${esc(o)}</li>`).join('')}</ul></div>`:''}
+   ${opt.transcript?`<details class="ai-tr"><summary>What you said</summary><p>${esc(opt.transcript)}</p></details>`:''}</div>`;
+  const r=await modal({title:'AI suggestion',body,buttons:[{label:'Dismiss',value:null},{label:'Apply',value:'apply',cls:'primary'}],collect:(el,v)=>v&&({cls:!!el.querySelector('[name=cls]:checked'),title:!!el.querySelector('[name=title]:checked'),desc:!!el.querySelector('[name=desc]:checked')})});
+  if(!r)return false;const cur=byId('items',it.id)||it;let n=0;
+  if(r.cls&&cls.length){cur.category=s.trade;cur.subcategory=okSub?s.subcategory:'';cur.defectType=okSub?s.defectType:'';UI.clsOther=null;n++}
+  if(r.title&&s.title){cur.title=s.title;n++}
+  if(r.desc&&s.description){cur.description=cur.description?cur.description.replace(/\s+$/,'')+'\n\n'+s.description:s.description;n++}
+  if(!n)return false;await save('items',cur);toast('AI suggestion applied');render();return true},
+ async photo(itemId,photoId,opt={}){const it=byId('items',itemId);if(!it)return;const done=busy('Analysing photo…');let s;
+  try{s=await this.analyze({images:[await this.image(photoId)],context:this.context(it)})}catch(e){done();return this.error(e)}done();return this.suggest(it,s,opt)},
+ async voice(itemId,mode){const it=byId('items',itemId);if(!it)return;let rec;
+  try{rec=await this.record(mode==='issue'?'Speak the issue':'Voice note',mode==='issue'?'Describe the issue: what, where and what needs fixing.':'Speak now – tap Stop when you are done.')}catch(e){return this.error(e)}
+  if(!rec)return;let done=busy('Transcribing…'),text;
+  try{text=(await this.transcribe(rec)).trim()}catch(e){done();return this.error(e)}done();
+  if(!text)return alertBox('No speech was detected in the recording. Please try again closer to the microphone.','Voice note');
+  if(mode==='issue'){done=busy('Analysing…');let s;try{s=await this.analyze({text,context:this.context(it)})}catch(e){done();
+    await this.error(e);return this.noteDialog(it,text)}done();if(!s.description)s.description=text;return this.suggest(it,s,{transcript:text})}
+  return this.noteDialog(it,text)},
+ async noteDialog(it,text){const has=!!(it.description||'').trim();
+  const r=await modal({title:'Voice note',body:`<label class="ai-note"><span class="help">Transcript – edit if needed</span><textarea name="t" rows="5">${esc(text)}</textarea></label>${has?'<p class="help" style="margin:6px 0 0">Add it below the current description, or replace the description.</p>':''}`,
+   buttons:[{label:'Cancel',value:null},...(has?[{label:'Replace description',value:'replace'}]:[]),{label:has?'Append':'Add to description',value:'append',cls:'primary'}],collect:(el,v)=>v&&{v,t:el.querySelector('[name=t]').value.trim()}});
+  if(!r||!r.t)return;const cur=byId('items',it.id)||it;cur.description=r.v==='replace'||!has?r.t:cur.description.replace(/\s+$/,'')+'\n\n'+r.t;await save('items',cur);toast(r.v==='replace'?'Description replaced':'Added to description');render()},
+ async snap(auditId,file){const done=busy('Adding photo…');let it,pid;
+  try{it=await newItem(auditId);const r=await resizeImage(await fileToDataURL(file),1600);const p=await putPhoto({id:uid(),...r,createdAt:Date.now()});pid=p.id;it.photos=[pid];await save('items',it)}catch(e){done();return alertBox('Could not add photo: '+e.message)}
+  done();location.hash='#/item/'+it.id;render();return this.photo(it.id,pid,{snap:true})}};
+function aiBarHTML(i){if(!AI.enabled())return'';const mic=AI.canRecord();
+ return`<div class="ai-bar"><span class="ai-lbl">${AI_ICON.spark}AI assistant</span>${mic?`<button type="button" class="btn sm" data-act="ai-voice" data-mode="note" data-id="${i.id}">${AI_ICON.mic}Voice note</button><button type="button" class="btn sm" data-act="ai-voice" data-mode="issue" data-id="${i.id}">${AI_ICON.talk}Speak full issue</button>`:''}${(i.photos||[]).length?`<button type="button" class="btn sm" data-act="ai-photo" data-id="${i.id}" data-ph="${i.photos[0]}">${AI_ICON.spark}Analyze photo</button>`:''}</div>`}
+const aiSnapHTML=a=>AI.enabled()?`<label class="btn ai-snap">${AI_ICON.spark}<span class="lbl">Snap & detect</span><input type="file" accept="image/*" capture="environment" hidden data-change="ai-snap" data-id="${a.id}"></label>`:'';
+const aiPhotoBtn=(id,ph)=>AI.enabled()?`<button data-act="ai-photo" data-id="${id}" data-ph="${ph}" title="Analyze with AI">${AI_ICON.spark} Analyze</button>`:'';
+function aiSettingsHTML(){if(!AI_RELAY_URL)return'';const on=AI.enabled();
+ return`<div class="card pad" style="margin-top:16px" id="ai-card"><h2 style="margin-top:0;font-size:17px;display:flex;align-items:center;gap:8px">${AI_ICON.spark}AI assistant</h2>
+ <p class="muted small" style="margin-top:0">Voice notes, photo analysis and “Snap & detect” suggest the title, trade / subcategory / defect and description. Photos and recordings are sent to the company AI service only when you tap an AI button${AI.auto()?' or add the first photo to a new issue':''}; suggestions are only applied when you tap Apply.</p>
+ ${on?`<form class="form-grid" onsubmit="return false"><label class="chk full"><input type="checkbox" data-change="ai-auto" ${AI.auto()?'checked':''}> Suggest automatically when I add the first photo to a new issue</label></form>`:`<div class="hint">Connect the company Dropbox above to use the AI assistant.</div>`}</div>`}
+Object.assign(ACT,{
+ 'ai-voice':el=>AI.voice(el.dataset.id,el.dataset.mode),
+ 'ai-photo':el=>AI.photo(el.dataset.id,el.dataset.ph)});
+Object.assign(CHG,{
+ 'ai-snap':el=>{const f=el.files&&el.files[0];el.value='';if(f)return AI.snap(el.dataset.id,f)},
+ 'ai-auto':el=>{localStorage.setItem('sap.ai.auto',el.checked?'1':'0');toast(el.checked?'Auto-suggest on':'Auto-suggest off',1200)}});
 
 </script>
 </body>
