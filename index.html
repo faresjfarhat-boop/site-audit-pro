@@ -657,7 +657,10 @@ const TOMBS=new Map();
 function bundleOf(store,r){if(store==='settings')return'settings';if(store==='templates')return'templates';if(store==='projects')return'projects/'+r.id;
  const pid=r.projectId||(store==='checklists'&&(byId('audits',r.auditId)||{}).projectId);return pid?'projects/'+pid:null}
 async function addTomb(key,bundle,ts=Date.now()){const t={id:key,bundle,deletedAt:ts};await DB.put('tombstones',t);TOMBS.set(key,t);Sync.markDirty(bundle)}
-async function save(store,o){o.updatedAt=Math.max(Date.now(),(o.updatedAt||0)+1);if(!o.createdAt)o.createdAt=o.updatedAt;await DB.put(store,o);const a=S[store];const i=a.findIndex(x=>x.id===o.id);if(i>=0)a[i]=o;else a.push(o);const b=bundleOf(store,o);if(b)Sync.markDirty(b);return o}
+const BY_STORES=['projects','audits','items','checklists','drawings'];
+function currentUser(){const t=typeof Dbx!=='undefined'&&Dbx.tok();const a=t&&t.account;return a?{name:a.name||a.email||'',email:a.email||''}:{name:localStorage.getItem('sap.inspector')||'',email:''}}
+async function save(store,o,opt={}){const isNew=!o.createdAt;o.updatedAt=Math.max(Date.now(),(o.updatedAt||0)+1);if(isNew)o.createdAt=o.updatedAt;
+ if(BY_STORES.includes(store)&&!opt.keepBy){const w=currentUser();if(w.name){o.updatedBy=w.name;o.updatedByEmail=w.email;if(isNew){o.createdBy=w.name;o.createdByEmail=w.email}}}await DB.put(store,o);const a=S[store];const i=a.findIndex(x=>x.id===o.id);if(i>=0)a[i]=o;else a.push(o);const b=bundleOf(store,o);if(b)Sync.markDirty(b);return o}
 async function remove(store,id){const rec=S[store].find(x=>x.id===id);const b=rec&&bundleOf(store,rec);await DB.del(store,id);S[store]=S[store].filter(x=>x.id!==id);if(b)await addTomb(store+':'+id,b)}
 async function saveSettings(){S.settings.id='main';S.settings.updatedAt=Date.now();await DB.put('settings',S.settings);Sync.markDirty('settings')}
 async function getPhoto(id){if(!id)return null;if(photoCache.has(id))return photoCache.get(id);let p=await DB.get('photos',id);if(!p&&Dbx.connected()&&!TOMBS.has('photos:'+id))p=await Sync.lazyPhoto(id);if(p)photoCache.set(id,p);return p}
@@ -793,7 +796,7 @@ function viewProject(id){const p=byId('projects',id);if(!p)return notFound();
  const audits=S.audits.filter(a=>a.projectId===id).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.createdAt-a.createdAt),items=projItems(id),drs=S.drawings.filter(d=>d.projectId===id);
  return`${crumbs([['Projects','#/'],[p.name]])}
  <div class="card pad" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">${logoBox(p.logo,p.name).replace('plogo','plogo" style="width:72px;height:72px;font-size:24px')}
- <div style="flex:1;min-width:220px"><h1 style="margin:0 0 6px;font-size:23px">${esc(p.name)}</h1><dl class="kv">${[['Reference',p.reference],['Client',p.client],['Address',p.address],['Date',fmtDate(p.date)],['Prepared by',p.company]].filter(x=>x[1]).map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${p.notes?`<p class="muted small" style="white-space:pre-wrap;margin:8px 0 0">${esc(p.notes)}</p>`:''}</div>
+ <div style="flex:1;min-width:220px"><h1 style="margin:0 0 6px;font-size:23px">${esc(p.name)}</h1><dl class="kv">${[['Reference',p.reference],['Client',p.client],['Address',p.address],['Date',fmtDate(p.date)],['Prepared by',p.company],['Last edited',p.updatedBy?fmtDT(p.updatedAt)+' by '+p.updatedBy:'']].filter(x=>x[1]).map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${p.notes?`<p class="muted small" style="white-space:pre-wrap;margin:8px 0 0">${esc(p.notes)}</p>`:''}</div>
  <div class="actions"><button class="btn" data-act="edit-project" data-id="${id}">${ic('edit')}<span class="lbl">Edit</span></button><button class="btn primary" data-act="report" data-type="project" data-id="${id}">${ic('file')}<span class="lbl">Report</span></button><button class="btn danger" data-act="del-project" data-id="${id}">${ic('trash')}</button></div></div>
  ${statsHTML(items,'p-'+id)}
  <div class="section"><h2>Audits / Inspections</h2><button class="btn primary sm" data-act="new-audit" data-id="${id}">${ic('plus')} New audit</button></div>
@@ -821,7 +824,7 @@ function viewItem(id){const i=byId('items',id);if(!i)return notFound();const a=b
  const sibs=auditItems(a.id).sort((x,y)=>x.number-y.number),ix=sibs.findIndex(x=>x.id===id),prev=sibs[ix-1],next=sibs[ix+1];
  const dr=i.pin&&byId('drawings',i.pin.drawingId);const drs=S.drawings.filter(d=>d.projectId===p.id);
  return`${crumbs([['Projects','#/'],[p.name,'#/project/'+p.id],[a.title,'#/audit/'+a.id],['Issue #'+i.number]])}
- <div class="page-head"><h1><span class="num">#${i.number}</span>${esc(i.title||'Untitled issue')}<span class="sub">Created ${fmtDT(i.createdAt)} · Updated ${fmtDT(i.updatedAt)}${i.closedAt&&i.status==='Closed'?' · Closed '+fmtDT(i.closedAt):''}</span></h1>
+ <div class="page-head"><h1><span class="num">#${i.number}</span>${esc(i.title||'Untitled issue')}<span class="sub">Created ${fmtDT(i.createdAt)}${i.createdBy?' by '+esc(i.createdBy):''} · Last edited ${fmtDT(i.updatedAt)}${i.updatedBy?' by <b>'+esc(i.updatedBy)+'</b>':''}${i.closedAt&&i.status==='Closed'?' · Closed '+fmtDT(i.closedAt):''}</span></h1>
  <div class="actions">${prev?`<a class="btn" href="#/item/${prev.id}" title="Previous">‹</a>`:''}${next?`<a class="btn" href="#/item/${next.id}" title="Next">›</a>`:''}<button class="btn" data-act="dup-item" data-id="${id}">Duplicate</button><button class="btn danger" data-act="del-item" data-id="${id}">${ic('trash')}</button><button class="btn primary" data-act="new-item" data-id="${a.id}">${ic('plus')} Next issue</button></div></div>
  <div class="two-col"><div class="card pad"><form class="form-grid" onsubmit="return false" id="item-form" data-id="${i.id}">
  <label class="full"><span>Title *</span><input name="title" data-change="item-field" value="${esc(i.title)}" placeholder="e.g. Cracked floor tile at entrance"></label>
@@ -861,7 +864,7 @@ function viewSettings(){const st=S.settings;onAfter(async()=>{if(navigator.stora
  return`<div class="page-head"><h1>Settings</h1></div>
  <div class="card pad"><h2 style="margin-top:0;font-size:17px">Company & report defaults</h2><form class="form-grid" onsubmit="return false">
  <label><span>Company name</span><input data-change="setting" name="company" value="${esc(st.company||'')}"></label>
- <label><span>Default inspector</span><input data-change="setting" name="inspector" value="${esc(st.inspector||'')}"></label>
+ <label><span>Default inspector</span><input data-change="setting" name="inspector" value="${esc(localStorage.getItem('sap.inspector')||'')}" placeholder="This device only"></label>
  <label class="full"><span>Company details (address, phone, email – shown on report cover)</span><textarea data-change="setting" name="companyDetails" rows="2">${esc(st.companyDetails||'')}</textarea></label>
  <label><span>Default report theme</span><select data-change="setting" name="reportColor">${Object.entries(THEMES).map(([k,v])=>`<option value="${v}" ${st.reportColor===v?'selected':''}>${k}</option>`).join('')}</select></label>
  <div><label><span>Company logo (used when a project has no logo)</span></label><div class="img-field">${st.logo?`<img src="${esc(st.logo)}" alt="">`:''}<label class="btn sm">${ic('upload')} Choose<input type="file" accept="image/*" hidden data-change="setting-logo"></label>${st.logo?`<button class="btn sm danger" data-act="clear-logo">Remove</button>`:''}</div></div>
@@ -876,10 +879,10 @@ const notFound=()=>emptyHTML('Not found','This record no longer exists.',`<a cla
 let lastRoute='';
 function parseHash(){const h=location.hash.replace(/^#\/?/,'');const [path,qs]=h.split('?');return{parts:path.split('/').filter(Boolean),params:Object.fromEntries(new URLSearchParams(qs||''))}}
 function render(){const {parts,params}=parseHash();UI.after=[];UI.list=null;let html;
- try{switch(parts[0]){case 'project':html=viewProject(parts[1]);break;case 'audit':html=viewAudit(parts[1],params);break;case 'item':html=viewItem(parts[1]);break;case 'drawing':html=viewDrawing(parts[1],params);break;case 'templates':html=viewTemplates();break;case 'settings':html=viewSettings();break;default:html=viewHome()}}
+ try{switch(parts[0]){case 'project':html=viewProject(parts[1]);break;case 'audit':html=viewAudit(parts[1],params);break;case 'item':html=viewItem(parts[1]);break;case 'drawing':html=viewDrawing(parts[1],params);break;case 'templates':html=viewTemplates();break;case 'settings':html=viewSettings();break;case 'dbx-admin':html=viewDbxAdmin();break;default:html=viewHome()}}
  catch(e){console.error(e);html=emptyHTML('Something went wrong',e.message)}
  const app=$('#app'),key=parts.join('/'),y=scrollY;app.innerHTML=html;scrollTo(0,key===lastRoute?y:0);lastRoute=key;
- $$('.topnav a').forEach(a=>a.classList.toggle('on',a.dataset.nav===(parts[0]==='templates'||parts[0]==='settings'?parts[0]:'projects')));
+ $$('.topnav a').forEach(a=>a.classList.toggle('on',a.dataset.nav===(parts[0]==='templates'||parts[0]==='settings'?parts[0]:parts[0]==='dbx-admin'?'settings':'projects')));
  UI.after.forEach(f=>f());hydrate();Sync.pill()}
 const cropCache=new Map();
 function hydrate(root=document){$$('img[data-photo]',root).forEach(async im=>{if(im.src)return;const p=await getPhoto(im.dataset.photo);if(p)im.src=p.data});
@@ -887,6 +890,7 @@ function hydrate(root=document){$$('img[data-photo]',root).forEach(async im=>{if
 
 /* ===== Forms ===== */
 const projectFields=()=>[{k:'name',label:'Project name',req:true,full:true},{k:'reference',label:'Reference / job no.'},{k:'client',label:'Client'},{k:'address',label:'Site address',full:true},{k:'date',label:'Project date',type:'date'},{k:'company',label:'Prepared by (company)'},{k:'logo',label:'Project / client logo',type:'image'},{k:'notes',label:'Notes',type:'textarea',full:true}];
+const defaultInspector=()=>localStorage.getItem('sap.inspector')||currentUser().name||'';
 const auditFields=()=>[{k:'title',label:'Audit title',req:true,full:true,ph:'e.g. Pre-handover inspection'},{k:'date',label:'Date',type:'date'},{k:'inspector',label:'Inspector'},{k:'weather',label:'Weather',type:'select',options:WEATHER},{k:'attendees',label:'Attendees / present'},{k:'notes',label:'Notes / general observations',type:'textarea',full:true},{k:'signature',label:'Inspector signature',type:'signature'}];
 function nextNumber(pid){return projItems(pid).reduce((m,i)=>Math.max(m,i.number||0),0)+1}
 async function newItem(auditId,extra={}){const a=byId('audits',auditId);const it={id:uid(),auditId,projectId:a.projectId,number:nextNumber(a.projectId),title:'',description:'',location:'',category:'',priority:'Medium',status:'Open',assignee:'',dueDate:'',photos:[],pin:null,...extra};await save('items',it);return it}
@@ -913,7 +917,7 @@ const ACT={
  'new-project':async()=>{const r=await formModal('New project',projectFields(),{date:today(),company:S.settings.company||''});if(!r)return;const p=await save('projects',{id:uid(),...r});location.hash='#/project/'+p.id},
  'edit-project':async el=>{const p=byId('projects',el.dataset.id);const r=await formModal('Edit project',projectFields(),p);if(!r)return;await save('projects',Object.assign(p,r));render()},
  'del-project':async el=>{const p=byId('projects',el.dataset.id);if(!await confirmBox(`Delete project “${p.name}” including all audits, issues, photos and drawings?`))return;await deleteProject(p);toast('Project deleted');location.hash='#/'},
- 'new-audit':async el=>{const n=S.audits.filter(a=>a.projectId===el.dataset.id).length+1;const r=await formModal('New audit / inspection',auditFields(),{title:'Inspection '+n,date:today(),inspector:S.settings.inspector||''});if(!r)return;const a=await save('audits',{id:uid(),projectId:el.dataset.id,...r});location.hash='#/audit/'+a.id},
+ 'new-audit':async el=>{const n=S.audits.filter(a=>a.projectId===el.dataset.id).length+1;const r=await formModal('New audit / inspection',auditFields(),{title:'Inspection '+n,date:today(),inspector:defaultInspector()});if(!r)return;const a=await save('audits',{id:uid(),projectId:el.dataset.id,...r});location.hash='#/audit/'+a.id},
  'edit-audit':async el=>{const a=byId('audits',el.dataset.id);const r=await formModal('Edit audit',auditFields(),a);if(!r)return;await save('audits',Object.assign(a,r));render()},
  'del-audit':async el=>{const a=byId('audits',el.dataset.id);if(!await confirmBox(`Delete audit “${a.title}” and all its issues?`))return;await deleteAudit(a);location.hash='#/project/'+a.projectId},
  'new-item':async el=>{const it=await newItem(el.dataset.id);location.hash='#/item/'+it.id;setTimeout(()=>{const t=$('[name=title]');t&&t.focus()},60)},
@@ -946,6 +950,8 @@ const ACT={
  backup:()=>exportBackup(),
  'dbx-connect':()=>Dbx.connect(false),'dbx-connect-code':()=>Dbx.connect(true),'dbx-disconnect':()=>Dbx.disconnect(),
  'dbx-sync':()=>Sync.now(true),'dbx-backup':()=>Sync.uploadFullBackup(),
+ 'dbx-recheck':async()=>{Dbx.loc=null;localStorage.removeItem('sap.dbx.loc');try{const l=await Dbx.resolveFolder();toast('Folder: '+l.folder+' ('+l.how+')',3000)}catch(e){alertBox(e.message)}render()},
+ 'dbx-resync':async()=>{if(!await confirmBox('Forget sync state on this device and re-download / re-upload everything?','Re-sync'))return;await Sync.resetMeta();Sync.markAllDirty();await Sync.now(true);render()},
  'sync-pill':()=>{if(Sync.state==='auth'||!Dbx.connected())location.hash='#/settings';else Sync.now(true)},
  'csv-all':()=>download(`site-audit-pro-all-issues-${today()}.csv`,csvBlob(S.items.slice().sort((a,b)=>(a.projectId+a.number).localeCompare(b.projectId+b.number)))),
  wipe:async()=>{if(!await confirmBox('Delete ALL projects, audits, issues, photos, drawings and templates from this browser? This cannot be undone. Export a backup first!'+(Dbx.connected()?' (Data already synced to Dropbox is not deleted there.)':''),'Delete'))return;for(const s of ALL_STORES)await DB.clear(s);photoCache.clear();await loadAll();await seed();toast(Dbx.connected()?'Local data deleted (the Dropbox copy is kept and will sync back unless you disconnect)':'All data deleted',4000);location.hash='#/';render()}};
@@ -955,9 +961,9 @@ const CHG={
  'upload-drawing':el=>{const f=el.files[0];if(f)uploadDrawing(el.dataset.id,f)},
  flt:el=>{const f=UI.filters[UI.list.key];f[el.dataset.k]=el.value;refreshList()},
  'cl-comment':async el=>{const c=byId('checklists',el.dataset.cl);c.questions.find(x=>x.id===el.dataset.q).comment=el.value;await save('checklists',c);toast('Saved',900)},
- setting:async el=>{S.settings[el.name]=el.name==='categories'?el.value.split('\n').map(s=>s.trim()).filter(Boolean):el.value;await saveSettings();toast('Settings saved',1000)},
+ setting:async el=>{if(el.name==='inspector'){localStorage.setItem('sap.inspector',el.value.trim());toast('Saved',900);return}S.settings[el.name]=el.name==='categories'?el.value.split('\n').map(s=>s.trim()).filter(Boolean):el.value;await saveSettings();toast('Settings saved',1000)},
  'setting-logo':async el=>{const f=el.files[0];if(!f)return;S.settings.logo=(await resizeImage(await fileToDataURL(f),500,'image/png')).data;await saveSettings();render()},
- 'dbx-key':el=>{const v=el.value.trim();if(v)localStorage.setItem('sap.dbx.key',v);else localStorage.removeItem('sap.dbx.key');toast('App key saved',1200)},
+ 'dbx-key':el=>{const v=el.value.trim();if(v)localStorage.setItem('sap.dbx.key',v);else localStorage.removeItem('sap.dbx.key');toast('App key saved',1200);render()},
  'dbx-opt':el=>{Dbx.setPref(el.name,el.checked);toast('Saved',900);if(el.checked)Sync.schedule(500)},
  restore:el=>{const f=el.files[0];if(f)importBackup(f);el.value=''}};
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el||el.closest('.modal-back'))return;if(el.tagName==='BUTTON'||el.tagName==='A')e.preventDefault();const f=ACT[el.dataset.act];if(f)Promise.resolve(f(el,e)).catch(err=>{console.error(err);alertBox('Error: '+err.message)})});
@@ -991,7 +997,7 @@ async function initViewer(d,params){const vp=$('#viewer'),layer=$('#layer'),img=
   const r2=await modal({title:'Add pin',body:`<div class="form-grid"><label class="full"><span>Create a new issue at this location</span><select name="audit">${audits.length?audits.map(a=>`<option value="${a.id}">in audit: ${esc(a.title)}</option>`).join(''):'<option value="">(a new audit will be created)</option>'}</select></label>${unp.length?`<label class="full"><span>…or link an existing unpinned issue</span><select name="existing"><option value="">— choose issue —</option>${unp.map(i=>`<option value="${i.id}">#${i.number} ${esc(i.title||'Untitled')}</option>`).join('')}</select></label>`:''}</div>`,
    buttons:[{label:'Cancel',value:null},...(unp.length?[{label:'Link existing',value:'link'}]:[]),{label:'New issue here',value:'new',cls:'primary'}],collect:(el,v)=>({v,audit:el.querySelector('[name=audit]').value,existing:el.querySelector('[name=existing]')?.value})});
   if(!r2)return;if(r2.v==='link'){if(!r2.existing)return toast('Choose an issue to link');const it=byId('items',r2.existing);it.pin=pin;await save('items',it);toast(`Pin #${it.number} placed`);render();return}
-  let aid=r2.audit;if(!aid){aid=(await save('audits',{id:uid(),projectId:d.projectId,title:'Inspection 1',date:today(),inspector:S.settings.inspector||''})).id}
+  let aid=r2.audit;if(!aid){aid=(await save('audits',{id:uid(),projectId:d.projectId,title:'Inspection 1',date:today(),inspector:defaultInspector()})).id}
   const it=await newItem(aid,{pin});location.hash='#/item/'+it.id}}
 async function pinPopup(id){const it=byId('items',id);const r=await modal({title:`Issue #${it.number}`,backdrop:true,body:`<div style="display:flex;gap:12px">${it.photos&&it.photos[0]?`<div class="thumb" style="width:90px;height:90px"><img data-photo="${it.photos[0]}" alt=""></div>`:''}<div><b>${esc(it.title||'Untitled')}</b><div class="meta" style="margin:4px 0">${esc(it.location||'')} ${it.category?'· '+esc(it.category):''}</div>${prBadge(it.priority)} ${stBadge(it.status)}${it.description?`<p class="small" style="margin:6px 0 0">${esc(it.description.slice(0,200))}</p>`:''}</div></div>`,
  onOpen:el=>hydrate(el),buttons:[{label:'Remove pin',value:'rm',cls:'danger'},{label:'Move pin',value:'mv'},{label:'Open issue',value:'open',cls:'primary'}]});
@@ -1171,8 +1177,15 @@ async function importBackup(file){let data;try{data=JSON.parse(await file.text()
  const done=busy('Restoring…');try{if(mode==='replace')for(const s of STORES)await DB.clear(s);for(const s of STORES){const recs=(st[s]||[]).filter(r=>r&&r.id);if(recs.length)await DB.tx(s,'readwrite',o=>{recs.forEach(r=>o.put(r))})}photoCache.clear();cropCache.clear();await loadAll();await seed();Sync.markAllDirty();toast('Backup restored');location.hash='#/';render()}catch(e){console.error(e);alertBox('Restore failed: '+e.message)}finally{done()}}
 
 
-/* ===== Dropbox (OAuth2 PKCE + HTTP API, no SDK) ===== */
-const DROPBOX_APP_KEY="3chvgntw3bim19b";   // optional build-time default (public App key)
+/* ===== Dropbox Business (team) – OAuth2 PKCE + HTTP API, no SDK ===== */
+// Build-time constants (set by src/build.js from env vars; see DROPBOX-SETUP.md)
+const DROPBOX_APP_KEY="gh6rb9jz9pgcnwc";
+const DROPBOX_ROOT_FOLDER="/Site Inspection";
+const DROPBOX_TEAM_ID="";
+const ALLOWED_EMAIL_DOMAINS="syden.me";
+const KEY_PLACEHOLDER='YOUR_DROPBOX_APP_KEY';
+const NOACCESS_MSG="You don't have access to the company Site Audit Pro folder. Ask your admin to share it with you.";
+const READONLY_MSG="You only have view access to the company Site Audit Pro folder, so your changes can't be saved to Dropbox. Ask your admin for edit access.";
 const DBX_API='https://api.dropboxapi.com/2/',DBX_CONTENT='https://content.dropboxapi.com/2/',DBX_TOKEN='https://api.dropboxapi.com/oauth2/token',DBX_AUTH='https://www.dropbox.com/oauth2/authorize';
 class DbxErr extends Error{constructor(msg,kind='api',status=0){super(msg);this.kind=kind;this.status=status}}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -1181,57 +1194,89 @@ const hjson=o=>JSON.stringify(o).replace(/[\u007f-\uffff]/g,c=>'\\u'+('000'+c.ch
 const dbxName=s=>String(s||'Untitled').replace(/[\\/:?*"<>|\u0000-\u001f]+/g,'-').replace(/\s+/g,' ').trim().slice(0,80)||'Untitled';
 const blobToDataURL=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(b)});
 const dataURLToBlob=async d=>(await fetch(d)).blob();
-const Dbx={
- key(){return localStorage.getItem('sap.dbx.key')||DROPBOX_APP_KEY},
+const rootName=()=>DROPBOX_ROOT_FOLDER.replace(/\/+$/,'').split('/').pop();
+const Dbx={loc:null,
+ key(){return localStorage.getItem('sap.dbx.key')||(DROPBOX_APP_KEY!==KEY_PLACEHOLDER?DROPBOX_APP_KEY:'')},
+ configured(){return!!this.key()},
  tok(){try{return JSON.parse(localStorage.getItem('sap.dbx.tok')||'null')}catch(e){return null}},
  setTok(t){if(t)localStorage.setItem('sap.dbx.tok',JSON.stringify(t));else localStorage.removeItem('sap.dbx.tok')},
- prefs(){let p={};try{p=JSON.parse(localStorage.getItem('sap.dbx.prefs')||'{}')}catch(e){}return{autoSync:true,autoPdf:true,photos:true,...p}},
- setPref(k,v){const p=this.prefs();p[k]=v;localStorage.setItem('sap.dbx.prefs',JSON.stringify(p))},
- connected(){const t=this.tok();return!!(t&&(t.refresh_token||t.access_token))},
+ prefs(){return{autoSync:true,autoPdf:true,photos:true}},   // always on for company use
+ connected(){const t=this.tok();return!!(t&&t.v===2&&(t.refresh_token||t.access_token))},
  redirectUri(){return/^https?:$/.test(location.protocol)?location.origin+location.pathname:null},
+ p(rel){if(!this.loc)throw new DbxErr(NOACCESS_MSG,'noaccess');return this.loc.folder+rel},
  async pkce(){const v=b64url(crypto.getRandomValues(new Uint8Array(48)));try{return{v,ch:b64url(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)))),m:'S256'}}catch(e){return{v,ch:v,m:'plain'}}},
- async connect(manual){const key=this.key();if(!key)return alertBox('Enter your Dropbox App key first (Settings › Dropbox). See DROPBOX-SETUP.md for how to create one.','Dropbox');
+ async connect(manual){const key=this.key();if(!key)return alertBox('Dropbox sync has not been set up in this version of the app yet. Please contact your administrator.','Dropbox');
   const{v,ch,m}=await this.pkce();const state=b64url(crypto.getRandomValues(new Uint8Array(16)));const ru=manual?null:this.redirectUri();
   const u=new URL(DBX_AUTH);Object.entries({client_id:key,response_type:'code',code_challenge:ch,code_challenge_method:m,token_access_type:'offline',state}).forEach(([k,x])=>u.searchParams.set(k,x));
+  if(localStorage.getItem('sap.dbx.reauth')){u.searchParams.set('force_reauthentication','true');localStorage.removeItem('sap.dbx.reauth')}
   if(ru){u.searchParams.set('redirect_uri',ru);localStorage.setItem('sap.dbx.pkce',JSON.stringify({v,state,ru,t:Date.now()}));location.href=u.toString();return}
   u.searchParams.delete('state');window.open(u.toString(),'_blank');
-  const r=await formModal('Connect Dropbox',[{k:'code',label:'Authorization code',req:true,full:true,ph:'Paste the code from Dropbox'}],{},{ok:'Connect',extra:`<p class="help">A Dropbox page opened in a new tab. Sign in, click <b>Allow</b>, then copy the code Dropbox shows and paste it here. <a href="${esc(u.toString())}" target="_blank" rel="noopener">Open the Dropbox page again</a></p>`});
+  const r=await formModal('Connect Dropbox',[{k:'code',label:'Authorization code',req:true,full:true,ph:'Paste the code from Dropbox'}],{},{ok:'Connect',extra:`<p class="help">A Dropbox page opened in a new tab. Sign in with your <b>company</b> Dropbox account, click <b>Allow</b>, then copy the code and paste it here. <a href="${esc(u.toString())}" target="_blank" rel="noopener">Open the Dropbox page again</a></p>`});
   if(!r)return;const done=busy('Connecting to Dropbox…');try{await this.exchange(r.code.trim(),v,null)}catch(e){alertBox('Dropbox connection failed: '+e.message)}finally{done()}},
- async handleRedirect(){const q=new URLSearchParams(location.search);if(!q.has('code')&&!q.has('error'))return;let saved=null;try{saved=JSON.parse(localStorage.getItem('sap.dbx.pkce')||'null')}catch(e){}localStorage.removeItem('sap.dbx.pkce');
+ async handleRedirect(){const q=new URLSearchParams(location.search);if(!q.has('code')&&!q.has('error'))return false;let saved=null;try{saved=JSON.parse(localStorage.getItem('sap.dbx.pkce')||'null')}catch(e){}localStorage.removeItem('sap.dbx.pkce');
   history.replaceState(null,'',location.pathname+'#/settings');
-  if(q.get('error')){toast('Dropbox: '+(q.get('error_description')||q.get('error')),4000);return}
-  if(!saved||saved.state!==q.get('state'))return alertBox('Dropbox sign-in could not be verified (state mismatch). Please try Connect again.');
-  const done=busy('Connecting to Dropbox…');try{await this.exchange(q.get('code'),saved.v,saved.ru)}catch(e){alertBox('Dropbox connection failed: '+e.message)}finally{done()}},
+  if(q.get('error')){toast('Dropbox: '+(q.get('error_description')||q.get('error')),4000);return true}
+  if(!saved||saved.state!==q.get('state')){alertBox('Dropbox sign-in could not be verified. Please try Connect again.');return true}
+  const done=busy('Connecting to Dropbox…');try{await this.exchange(q.get('code'),saved.v,saved.ru)}catch(e){alertBox('Dropbox connection failed: '+e.message)}finally{done()}return true},
+ accountProblem(a){if(!a.team)return`Site Audit Pro only works with your company Dropbox account. You signed in with a personal Dropbox account${a.email?' ('+a.email+')':''}. Please connect again and sign in with your work account.`;
+  if(DROPBOX_TEAM_ID&&a.team.id!==DROPBOX_TEAM_ID)return`The Dropbox account ${a.email||''} belongs to a different team (“${a.team.name||a.team.id}”). Please sign in with your company Dropbox account.`;
+  const doms=ALLOWED_EMAIL_DOMAINS.split(',').map(x=>x.trim().toLowerCase().replace(/^@/,'')).filter(Boolean);
+  if(doms.length&&!doms.includes(String(a.email||'').split('@').pop().toLowerCase()))return`The Dropbox account ${a.email||''} is not a company account (allowed: ${doms.map(d=>'@'+d).join(', ')}). Please sign in with your work account.`;return null},
  async exchange(code,verifier,ru){const body=new URLSearchParams({code,grant_type:'authorization_code',code_verifier:verifier,client_id:this.key()});if(ru)body.set('redirect_uri',ru);
   let r;try{r=await fetch(DBX_TOKEN,{method:'POST',body})}catch(e){throw new DbxErr('Network unavailable','offline')}const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.access_token)throw new DbxErr(j.error_description||j.error||('Token request failed ('+r.status+')'),'auth',r.status);
-  this.setTok({access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()+(j.expires_in||14400)*1000-60000,account_id:j.account_id});
-  try{const a=await this.rpc('users/get_current_account');const t=this.tok();t.account={name:a.name&&a.name.display_name,email:a.email};this.setTok(t)}catch(e){console.warn(e)}
-  await Sync.resetMeta();Sync.markAllDirty();Sync.setState('idle');toast('Dropbox connected');render();Sync.now(true)},
- async disconnect(){if(!await confirmBox('Disconnect Dropbox on this device? Your local data and the files in Dropbox are kept.','Disconnect'))return;
-  try{if(this.tok())await fetch(DBX_API+'auth/token/revoke',{method:'POST',headers:{Authorization:'Bearer '+(await this.token())}})}catch(e){}
-  this.setTok(null);await Sync.resetMeta();Sync.setState('idle');toast('Dropbox disconnected');render()},
+  this.setTok({v:2,access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()+(j.expires_in||14400)*1000-60000,account_id:j.account_id});
+  let a;try{a=await this.rpc('users/get_current_account')}catch(e){this.setTok(null);throw e}
+  const bad=this.accountProblem(a);if(bad){await this.revoke();this.setTok(null);localStorage.setItem('sap.dbx.reauth','1');render();alertBox(bad,'Company account required');return}
+  const t=this.tok();t.account={name:a.name&&a.name.display_name,email:a.email,team:{id:a.team.id,name:a.team.name}};this.setTok(t);
+  this.loc=null;localStorage.removeItem('sap.dbx.loc');await Sync.resetMeta();Sync.markAllDirty();Sync.setState('idle');toast('Dropbox connected');render();
+  try{await this.ensureFolder()}catch(e){if(e.kind==='noaccess'){Sync.setState('noaccess',e.message);render();alertBox(e.message,'Company folder');return}}
+  Sync.now(true)},
+ async revoke(){try{const t=this.tok();if(t&&t.access_token)await fetch(DBX_API+'auth/token/revoke',{method:'POST',headers:{Authorization:'Bearer '+t.access_token}})}catch(e){}},
+ async disconnect(){if(!await confirmBox('Disconnect Dropbox on this device? Your local data and the company folder are kept.','Disconnect'))return;
+  await this.revoke();this.setTok(null);this.loc=null;localStorage.removeItem('sap.dbx.loc');await Sync.resetMeta();Sync.setState('idle');toast('Dropbox disconnected');render()},
+ /* Locate the shared company folder. Team-space accounts: send Dropbox-API-Path-Root with root_namespace_id so
+    DROPBOX_ROOT_FOLDER resolves in the team space. Older team layouts (team folder mounted inside the member's
+    home): fall back to the home namespace, then to a folder search. Only creates the folder in the team root
+    (succeeds only for users allowed to write there, e.g. the admin). */
+ async resolveFolder(){const a=await this.rpc('users/get_current_account');const ri=a.root_info||{};const teamSpace=!!(ri.root_namespace_id&&ri.root_namespace_id!==ri.home_namespace_id);
+  const bad=this.accountProblem(a);if(bad)throw new DbxErr(bad,'auth');const t=this.tok();if(t){t.account={name:a.name&&a.name.display_name,email:a.email,team:{id:a.team.id,name:a.team.name}};this.setTok(t)}
+  const base={rootNs:ri.root_namespace_id||null,homeNs:ri.home_namespace_id||null,teamSpace,checkedAt:Date.now()};const set=(root,folder,how)=>{this.loc={...base,root,folder,how};localStorage.setItem('sap.dbx.loc',JSON.stringify(this.loc));return this.loc};
+  const roots=teamSpace?[String(ri.root_namespace_id),null]:[null];const ok=e=>['notfound','noaccess'].includes(e.kind);
+  for(const root of roots){try{const m=await this.rpc('files/get_metadata',{path:DROPBOX_ROOT_FOLDER},{root});if(m['.tag']==='folder')return set(root,m.path_display,root?'team space':'home')}catch(e){if(!ok(e))throw e}}
+  for(const root of roots){try{const r=await this.rpc('files/search_v2',{query:rootName(),options:{file_categories:[{'.tag':'folder'}],max_results:50}},{root});
+    const ms=(r.matches||[]).map(x=>x.metadata&&x.metadata.metadata).filter(m=>m&&m['.tag']==='folder'&&m.name.toLowerCase()===rootName().toLowerCase()).sort((x,y)=>x.path_display.length-y.path_display.length);
+    if(ms[0])return set(root,ms[0].path_display,'search')}catch(e){if(!ok(e)&&e.kind!=='api')throw e}}
+  if(teamSpace){try{const r=await this.rpc('files/create_folder_v2',{path:DROPBOX_ROOT_FOLDER,autorename:false},{root:String(ri.root_namespace_id)});toast('Created the shared company folder “'+DROPBOX_ROOT_FOLDER+'”. Share it with your staff in Dropbox.',5000);return set(String(ri.root_namespace_id),r.metadata.path_display,'created')}catch(e){if(e.kind==='offline')throw e}}
+  this.loc=null;localStorage.removeItem('sap.dbx.loc');throw new DbxErr(NOACCESS_MSG,'noaccess')},
+ async ensureFolder(){if(!this.loc){try{this.loc=JSON.parse(localStorage.getItem('sap.dbx.loc')||'null')}catch(e){}}
+  if(this.loc){try{const m=await this.rpc('files/get_metadata',{path:this.loc.folder},{root:this.loc.root});if(m['.tag']==='folder')return this.loc}catch(e){if(!['notfound','noaccess'].includes(e.kind))throw e}}
+  return this.resolveFolder()},
  async token(force){let t=this.tok();if(!t)throw new DbxErr('Dropbox not connected','auth');if(!force&&t.access_token&&Date.now()<t.expires_at)return t.access_token;
   if(!t.refresh_token)throw new DbxErr('Dropbox session expired – please reconnect','auth');
   if(!this._ref)this._ref=(async()=>{let r;try{r=await fetch(DBX_TOKEN,{method:'POST',body:new URLSearchParams({grant_type:'refresh_token',refresh_token:t.refresh_token,client_id:this.key()})})}catch(e){throw new DbxErr('Network unavailable','offline')}
    const j=await r.json().catch(()=>({}));if(!r.ok||!j.access_token)throw new DbxErr(j.error_description||'Dropbox access was revoked – please reconnect','auth',r.status);
    t={...this.tok(),access_token:j.access_token,expires_at:Date.now()+(j.expires_in||14400)*1000-60000};this.setTok(t);return t.access_token})().finally(()=>{this._ref=null});
   return this._ref},
+ rootHeader(opt){const root=opt&&opt.root!==undefined?opt.root:(this.loc&&this.loc.root);return root?{'Dropbox-API-Path-Root':hjson({'.tag':'root',root:String(root)})}:{}},
  async call(url,init,attempt=0){if(!navigator.onLine)throw new DbxErr('You are offline','offline');const tk=await this.token(!!init._force);const h={...(init.headers||{}),Authorization:'Bearer '+tk};let r;
   try{r=await fetch(url,{method:'POST',headers:h,body:init.body})}catch(e){throw new DbxErr('Network unavailable','offline')}
   if(r.status===401&&attempt<2){const t=this.tok();if(t){t.expires_at=0;this.setTok(t)}return this.call(url,{...init,_force:true},attempt+1)}
   if((r.status===429||r.status===503)&&attempt<6){let ra=parseFloat(r.headers.get('Retry-After'));if(!ra){try{const j=await r.clone().json();ra=j.error&&j.error.retry_after}catch(e){}}Sync.setState('syncing','Rate limited – retrying');await sleep(1000*Math.min(60,ra||2**attempt));return this.call(url,init,attempt+1)}
   if(r.status>=500&&attempt<3){await sleep(1000*2**attempt);return this.call(url,init,attempt+1)}
   return r},
- async err(r){let j={};try{j=await r.json()}catch(e){}const s=j.error_summary||j.error_description||('HTTP '+r.status);return new DbxErr(s,/not_found/.test(s)?'notfound':/conflict/.test(s)?'conflict':r.status===401?'auth':r.status===507||/insufficient_space/.test(s)?'space':'api',r.status)},
- async rpc(path,arg=null){const r=await this.call(DBX_API+path,{headers:{'Content-Type':'application/json'},body:JSON.stringify(arg)});if(!r.ok)throw await this.err(r);return r.json()},
- async upload(path,blob,mode={'.tag':'overwrite'}){const r=await this.call(DBX_CONTENT+'files/upload',{headers:{'Content-Type':'application/octet-stream','Dropbox-API-Arg':hjson({path,mode,autorename:false,mute:true})},body:blob});if(!r.ok)throw await this.err(r);return r.json()},
- async download(path){const r=await this.call(DBX_CONTENT+'files/download',{headers:{'Dropbox-API-Arg':hjson({path})}});if(!r.ok)throw await this.err(r);let meta=null;try{meta=JSON.parse(r.headers.get('Dropbox-API-Result')||'null')}catch(e){}return{blob:await r.blob(),meta}},
+ async err(r){let j={};try{j=await r.json()}catch(e){}const s=j.error_summary||j.error_description||(typeof j.error==='string'?j.error:'')||('HTTP '+r.status);
+  if(/no_write_permission|insufficient_permissions/.test(s))return new DbxErr(READONLY_MSG,'noaccess',r.status);
+  if(/access_denied|no_permission|invalid_root|missing_scope/.test(s))return new DbxErr(/missing_scope/.test(s)?'The Dropbox app is missing a permission ('+s+'). Contact your administrator.':NOACCESS_MSG,/missing_scope/.test(s)?'api':'noaccess',r.status);
+  return new DbxErr(s,/not_found/.test(s)?'notfound':/conflict/.test(s)?'conflict':r.status===401?'auth':r.status===507||/insufficient_space/.test(s)?'space':'api',r.status)},
+ async rpc(path,arg=null,opt){const h={'Content-Type':'application/json',...(path.startsWith('files/')?this.rootHeader(opt):{})};const r=await this.call(DBX_API+path,{headers:h,body:JSON.stringify(arg)});if(!r.ok)throw await this.err(r);return r.json()},
+ async upload(path,blob,mode={'.tag':'overwrite'}){const r=await this.call(DBX_CONTENT+'files/upload',{headers:{'Content-Type':'application/octet-stream','Dropbox-API-Arg':hjson({path,mode,autorename:false,mute:true}),...this.rootHeader()},body:blob});if(!r.ok)throw await this.err(r);return r.json()},
+ async download(path){const r=await this.call(DBX_CONTENT+'files/download',{headers:{'Dropbox-API-Arg':hjson({path}),...this.rootHeader()}});if(!r.ok)throw await this.err(r);let meta=null;try{meta=JSON.parse(r.headers.get('Dropbox-API-Result')||'null')}catch(e){}return{blob:await r.blob(),meta}},
  async listAll(path,recursive=false){let r;try{r=await this.rpc('files/list_folder',{path,recursive,include_deleted:false})}catch(e){if(e.kind==='notfound')return{entries:[],cursor:null};throw e}let es=r.entries;while(r.has_more){r=await this.rpc('files/list_folder/continue',{cursor:r.cursor});es=es.concat(r.entries)}return{entries:es,cursor:r.cursor}}
 };
 
 /* ===== Sync engine =====
- Dropbox App folder layout:
+ Shared company folder layout (DROPBOX_ROOT_FOLDER, default "/Site Audit Pro", in the team space):
   /data/settings.json            company settings        /data/templates.json   checklist templates
   /data/projects/<projectId>.json project + audits + issues + drawings metadata + checklists + tombstones
   /photos/<photoId>.jpg (+ .orig.jpg original, .json annotation shapes)   /drawings/<photoId>.jpg
@@ -1243,7 +1288,7 @@ const SYNC_STORES=['projects','audits','items','drawings','checklists','template
 let SM=null;
 const Sync={state:'idle',msg:'',
  async loadMeta(){SM=(await DB.get('meta','sync'))||null;if(!SM)await this.resetMeta(false)},
- async resetMeta(persist=true){SM={id:'sync',dirty:{},revs:{},photoRev:{},photoUp:{},remoteDel:[],cursor:null,lastSync:0};if(persist)await DB.put('meta',SM)},
+ async resetMeta(persist=true){SM={id:'sync',dirty:{},revs:{},photoRev:{},photoUp:{},remoteDel:[],cursor:null,lastSync:0};Sync._lazyFail&&Sync._lazyFail.clear();if(persist)await DB.put('meta',SM)},
  saveMeta(){clearTimeout(this._mt);this._mt=setTimeout(()=>DB.put('meta',SM).catch(console.error),250)},
  markDirty(b){if(!SM||!b)return;SM.dirty[b]=(SM.dirty[b]||0)+1;this.saveMeta();this.schedule();this.pill()},
  markAllDirty(){if(!SM)return;['settings','templates',...S.projects.map(p=>'projects/'+p.id),...[...TOMBS.values()].map(t=>t.bundle)].forEach(b=>SM.dirty[b]=(SM.dirty[b]||0)+1);this.saveMeta()},
@@ -1252,25 +1297,25 @@ const Sync={state:'idle',msg:'',
  setState(s,msg=''){this.state=s;this.msg=msg;this.pill()},
  pending(){return SM?Object.keys(SM.dirty).length:0},
  pill(){const el=$('#sync-pill');if(!el)return;const con=Dbx.connected();el.hidden=!con;if(!con)return;const n=this.pending()+(this._pdfq||0);
-  const ago=SM&&SM.lastSync?timeAgo(SM.lastSync):'never';const txt={syncing:this.msg||'Syncing…',ok:'Synced '+ago,idle:n?`${n} change${n>1?'s':''} to sync`:'Dropbox',offline:`Offline${n?' · '+n+' pending':''}`,error:'Sync error – tap to retry',auth:'Reconnect Dropbox'}[this.state]||'Dropbox';
+  const ago=SM&&SM.lastSync?timeAgo(SM.lastSync):'never';const txt={syncing:this.msg||'Syncing…',ok:'Synced '+ago,idle:n?`${n} change${n>1?'s':''} to sync`:'Dropbox',offline:`Offline${n?' · '+n+' pending':''}`,error:'Sync error – tap to retry',auth:'Reconnect Dropbox',noaccess:'No folder access'}[this.state]||'Dropbox';
   el.className='sync-pill s-'+this.state;el.title=(this.msg||txt)+(SM&&SM.lastSync?' · Last sync '+fmtDT(SM.lastSync):'');el.querySelector('span').textContent=txt;
   const st=$('#dbx-status');if(st)st.textContent=`${txt}${this.state==='error'&&this.msg?' ('+this.msg+')':''} · Last sync: ${SM&&SM.lastSync?fmtDT(SM.lastSync):'never'}`},
  now(manual){if(!Dbx.connected())return Promise.resolve();if(this._p){this._again=true;return this._p}
   this._p=(async()=>{do{this._again=false;await this.run(manual)}while(this._again)})().finally(()=>{this._p=null});return this._p},
  async run(manual){if(!navigator.onLine){this.setState('offline');return}this.setState('syncing');
-  try{const changed=await this.pull();await this.push();await this.flushPdfQueue();await this.photos();
+  try{await Dbx.ensureFolder();const changed=await this.pull();await this.push();await this.flushPdfQueue();await this.photos();
    SM.lastSync=Date.now();await DB.put('meta',SM);this.setState('ok');if(changed)safeRender();if(manual)toast('Dropbox sync complete',1400)}
   catch(e){console.warn('Sync failed:',e);await DB.put('meta',SM).catch(()=>{});
-   if(e.kind==='offline'){this.setState('offline')}else if(e.kind==='auth'){this.setState('auth',e.message);if(manual)alertBox(e.message)}
+   if(e.kind==='offline'){this.setState('offline')}else if(e.kind==='noaccess'){this.setState('noaccess',e.message);if(manual)alertBox(e.message,'Company folder')}else if(e.kind==='auth'){this.setState('auth',e.message);if(manual)alertBox(e.message)}
    else{this.setState('error',e.message);clearTimeout(this._rt);this._rt=setTimeout(()=>this.now(),60000);if(manual)alertBox('Dropbox sync failed: '+e.message)}}},
- keyOfPath(p){const m=/^\/data\/(settings|templates)\.json$/i.exec(p);if(m)return m[1].toLowerCase();const n=/^\/data\/projects\/([^/]+)\.json$/i.exec(p);return n?'projects/'+n[1]:null},
- pathOf(k){return'/data/'+k+'.json'},
+ keyOfPath(p){const F=Dbx.loc.folder;if(p.toLowerCase().indexOf(F.toLowerCase()+'/')!==0)return null;p=p.slice(F.length);const m=/^\/data\/(settings|templates)\.json$/i.exec(p);if(m)return m[1].toLowerCase();const n=/^\/data\/projects\/([^/]+)\.json$/i.exec(p);return n?'projects/'+n[1]:null},
+ pathOf(k){return Dbx.p('/data/'+k+'.json')},
  async pull(){let es=[],cursor=SM.cursor;
   if(cursor){try{let r=await Dbx.rpc('files/list_folder/continue',{cursor});es=r.entries;while(r.has_more){r=await Dbx.rpc('files/list_folder/continue',{cursor:r.cursor});es=es.concat(r.entries)}cursor=r.cursor}catch(e){if(/reset/.test(e.message)||e.kind==='notfound')cursor=null;else throw e}}
-  if(!cursor){const r=await Dbx.listAll('/data',true);es=r.entries;cursor=r.cursor}
+  if(!cursor){const r=await Dbx.listAll(Dbx.p('/data'),true);es=r.entries;cursor=r.cursor}
   let changed=false;for(const e of es){if(e['.tag']!=='file')continue;const k=this.keyOfPath(e.path_display||e.path_lower);if(!k||SM.revs[k]===e.rev)continue;
    const{blob,meta}=await Dbx.download(e.path_lower);let b;try{b=JSON.parse(await blob.text())}catch(x){console.warn('Bad sync file',e.path_display);continue}
-   if(await this.apply(k,b))changed=true;SM.revs[k]=(meta&&meta.rev)||e.rev}
+   if(await this.apply(k,b))changed=true;SM.revs[k]=(meta&&meta.rev)||e.rev;this.saveMeta()}
   SM.cursor=cursor;return changed},
  async apply(key,b){if(!b||b.format!=='sap-sync-1')return false;let changed=false;
   for(const[k,ts]of Object.entries(b.tombstones||{})){const lt=TOMBS.get(k);if(!lt||lt.deletedAt<ts){const t={id:k,bundle:key,deletedAt:ts};await DB.put('tombstones',t);TOMBS.set(k,t)}
@@ -1282,7 +1327,7 @@ const Sync={state:'idle',msg:'',
    const t=TOMBS.get(k);if(t&&t.deletedAt>=(rec.updatedAt||0))continue;
    if(store==='settings'){if((rec.updatedAt||0)>(S.settings.updatedAt||0)){S.settings={...rec,id:'main'};await DB.put('settings',S.settings);changed=true}continue}
    const arr=S[store],j=arr.findIndex(x=>x.id===id);if(j<0||(rec.updatedAt||0)>(arr[j].updatedAt||0)){await DB.put(store,rec);if(j<0)arr.push(rec);else arr[j]=rec;changed=true}}
-  if(changed)cropCache.clear();return changed},
+  if(changed){cropCache.clear();if(key.startsWith('projects/'))await fixNumbers(key.slice(9))}return changed},
  build(key){const recs={},tombs={};const add=(s,r)=>{recs[s+':'+r.id]=r};
   if(key==='settings')add('settings',{...S.settings,id:'main'});else if(key==='templates')S.templates.forEach(t=>add('templates',t));
   else{const pid=key.slice(9);const p=byId('projects',pid);if(p)add('projects',p);const aids=new Set();
@@ -1291,54 +1336,66 @@ const Sync={state:'idle',msg:'',
   for(const t of TOMBS.values())if(t.bundle===key)tombs[t.id]=t.deletedAt;
   return{format:'sap-sync-1',key,savedAt:new Date().toISOString(),records:recs,tombstones:tombs}},
  async push(){for(const key of Object.keys(SM.dirty)){const ver=SM.dirty[key],path=this.pathOf(key);
-  for(let a=0;;a++){const body=new Blob([JSON.stringify(this.build(key))],{type:'application/json'});const rev=SM.revs[key];
+  for(let a=0;;a++){if(a)await sleep(150+Math.random()*400*a);const body=new Blob([JSON.stringify(this.build(key))],{type:'application/json'});const rev=SM.revs[key];
    try{const m=await Dbx.upload(path,body,rev?{'.tag':'update',update:rev}:{'.tag':'add'});SM.revs[key]=m.rev;break}
-   catch(e){if(e.kind!=='conflict'||a>=4)throw e;const{blob,meta}=await Dbx.download(path);const b=JSON.parse(await blob.text());if(await this.apply(key,b))safeRender();SM.revs[key]=meta&&meta.rev?meta.rev:(await Dbx.rpc('files/get_metadata',{path})).rev}}
+   catch(e){if(e.kind!=='conflict'||a>=8)throw e;const{blob,meta}=await Dbx.download(path);const b=JSON.parse(await blob.text());if(await this.apply(key,b))safeRender();SM.revs[key]=meta&&meta.rev?meta.rev:(await Dbx.rpc('files/get_metadata',{path})).rev}}
   if(SM.dirty[key]===ver)delete SM.dirty[key];this.saveMeta();this.pill()}},
- async photos(){const remote=new Map();for(const dir of['/photos','/drawings'])for(const e of(await Dbx.listAll(dir)).entries)if(e['.tag']==='file')remote.set(e.name.toLowerCase(),{...e,dir});
-  for(const p of SM.remoteDel.slice()){try{await Dbx.rpc('files/delete_v2',{path:p})}catch(e){if(e.kind!=='notfound')throw e}SM.remoteDel.splice(SM.remoteDel.indexOf(p),1);remote.delete(p.split('/').pop())}
+ async photos(){const remote=new Map();for(const dir of['/photos','/drawings'])for(const e of(await Dbx.listAll(Dbx.p(dir))).entries)if(e['.tag']==='file')remote.set(e.name.toLowerCase(),{...e,dir});
+  for(const p of SM.remoteDel.slice()){try{await Dbx.rpc('files/delete_v2',{path:Dbx.p(p)})}catch(e){if(e.kind!=='notfound')throw e}SM.remoteDel.splice(SM.remoteDel.indexOf(p),1);remote.delete(p.split('/').pop())}
   const drawIds=new Set(S.drawings.map(d=>d.imageId));const upOn=Dbx.prefs().photos;let n=0;
   if(upOn)for(const id of await DB.keys('photos')){const p=await DB.get('photos',id);if(!p)continue;const dir=(p.kind==='drawing'||drawIds.has(id))?'/drawings':'/photos';const r=remote.get(id+'.jpg');const t=p.updatedAt||0;
    if(!(!r||(t>Date.parse(r.server_modified)&&t>(SM.photoUp[id]||0))))continue;
-   this.setState('syncing',`Uploading photos… ${++n}`);const m=await Dbx.upload(`${dir}/${id}.jpg`,await dataURLToBlob(p.data));
-   if(p.orig)await Dbx.upload(`${dir}/${id}.orig.jpg`,await dataURLToBlob(p.orig));if(p.shapes&&p.shapes.length)await Dbx.upload(`${dir}/${id}.json`,new Blob([JSON.stringify({shapes:p.shapes})]));
+   this.setState('syncing',`Uploading photos… ${++n}`);const m=await Dbx.upload(Dbx.p(`${dir}/${id}.jpg`),await dataURLToBlob(p.data));
+   if(p.orig)await Dbx.upload(Dbx.p(`${dir}/${id}.orig.jpg`),await dataURLToBlob(p.orig));if(p.shapes&&p.shapes.length)await Dbx.upload(Dbx.p(`${dir}/${id}.json`),new Blob([JSON.stringify({shapes:p.shapes})]));
    SM.photoRev[id]=m.rev;SM.photoUp[id]=t;this.saveMeta()}
   const refs=new Set([...S.items.flatMap(i=>i.photos||[]),...drawIds]);n=0;let got=false;
   for(const id of refs){if(TOMBS.has('photos:'+id))continue;const r=remote.get(id+'.jpg');if(!r)continue;const loc=await DB.get('photos',id);
    if(loc&&(SM.photoRev[id]===r.rev||(loc.updatedAt||0)>Date.parse(r.server_modified)))continue;this.setState('syncing',`Downloading photos… ${++n}`);await this.fetchPhoto(id,r.dir,remote);got=true}
   if(got){cropCache.clear();hydrate()}},
- async fetchPhoto(id,dir,remote){const{blob,meta}=await Dbx.download(`${dir}/${id}.jpg`);const jpg=b=>new Blob([b],{type:'image/jpeg'});const data=await blobToDataURL(jpg(blob));const im=await loadImg(data);
+ async fetchPhoto(id,dir,remote){const{blob,meta}=await Dbx.download(Dbx.p(`${dir}/${id}.jpg`));const jpg=b=>new Blob([b],{type:'image/jpeg'});const data=await blobToDataURL(jpg(blob));const im=await loadImg(data);
   const p={id,data,w:im.naturalWidth,h:im.naturalHeight};if(dir==='/drawings')p.kind='drawing';
-  try{if(remote&&remote.has(id+'.orig.jpg'))p.orig=await blobToDataURL(jpg((await Dbx.download(`${dir}/${id}.orig.jpg`)).blob));if(remote&&remote.has(id+'.json'))p.shapes=JSON.parse(await (await Dbx.download(`${dir}/${id}.json`)).blob.text()).shapes}catch(e){console.warn(e)}
+  try{if(remote&&remote.has(id+'.orig.jpg'))p.orig=await blobToDataURL(jpg((await Dbx.download(Dbx.p(`${dir}/${id}.orig.jpg`))).blob));if(remote&&remote.has(id+'.json'))p.shapes=JSON.parse(await (await Dbx.download(Dbx.p(`${dir}/${id}.json`))).blob.text()).shapes}catch(e){console.warn(e)}
   p.updatedAt=Date.now();await DB.put('photos',p);photoCache.set(id,p);SM.photoRev[id]=(meta&&meta.rev)||(remote&&remote.get(id+'.jpg')||{}).rev;SM.photoUp[id]=p.updatedAt;this.saveMeta();return p},
  _lazy:new Map(),_lazyFail:new Set(),
  lazyPhoto(id){if(!navigator.onLine||this._lazyFail.has(id))return Promise.resolve(null);if(this._lazy.has(id))return this._lazy.get(id);
-  const pr=(async()=>{const dir=S.drawings.some(d=>d.imageId===id)?'/drawings':'/photos';for(const d of[dir,dir==='/photos'?'/drawings':'/photos']){try{return await this.fetchPhoto(id,d,null)}catch(e){if(e.kind!=='notfound'){this._lazyFail.add(id);return null}}}this._lazyFail.add(id);return null})().finally(()=>this._lazy.delete(id));
+  const pr=(async()=>{if(!Dbx.loc)return null;const dir=S.drawings.some(d=>d.imageId===id)?'/drawings':'/photos';for(const d of[dir,dir==='/photos'?'/drawings':'/photos']){try{return await this.fetchPhoto(id,d,null)}catch(e){if(e.kind!=='notfound'){this._lazyFail.add(id);return null}}}this._lazyFail.add(id);return null})().finally(()=>this._lazy.delete(id));
   this._lazy.set(id,pr);return pr},
- reportPath(d,o){const p=d.project;const name=(d.audit?d.audit.title:'Project report')+'_'+today()+'.pdf';return`/reports/${dbxName(p.name)}/${dbxName(name)}`},
- async uploadReport(blob,d,o){const path=this.reportPath(d,o);try{this.setState('syncing','Uploading report…');await Dbx.upload(path,blob);this.setState(this.pending()?'idle':'ok');toast('Report saved to Dropbox: '+path,3500);window.__lastDbxReport=path;return path}
-  catch(e){if(e.kind==='offline'){await DB.put('meta',{id:'pdf:'+uid(),path,blob,t:Date.now()});this._pdfq=(this._pdfq||0)+1;this.setState('offline');toast('Offline – the report will upload to Dropbox when you are back online',3500)}else{this.setState('error',e.message);alertBox('Could not save the report to Dropbox: '+e.message)}}},
- async flushPdfQueue(){const q=(await DB.all('meta')).filter(m=>m.id.startsWith('pdf:'));for(const m of q){await Dbx.upload(m.path,m.blob);await DB.del('meta',m.id)}this._pdfq=0},
- async uploadFullBackup(){const done=busy('Uploading full backup to Dropbox…');try{const d=await buildBackup();const path=`/backups/full-${today()}-${new Date().toTimeString().slice(0,5).replace(':','')}.json`;await Dbx.upload(path,new Blob([JSON.stringify(d)],{type:'application/json'}));toast('Backup saved to Dropbox: '+path,3500)}catch(e){alertBox('Backup upload failed: '+e.message)}finally{done()}}
+ reportPath(d,o){const p=d.project;const name=(d.audit?d.audit.title:'Project report')+'_'+today()+'.pdf';return Dbx.p(`/reports/${dbxName(p.name)}/${dbxName(name)}`)},
+ async uploadReport(blob,d,o){let path;try{if(navigator.onLine)await Dbx.ensureFolder();path=this.reportPath(d,o);this.setState('syncing','Uploading report…');await Dbx.upload(path,blob);this.setState(this.pending()?'idle':'ok');toast('Report saved to Dropbox: '+path,3500);window.__lastDbxReport=path;return path}
+  catch(e){if(e.kind==='offline'){await DB.put('meta',{id:'pdf:'+uid(),rel:`/reports/${dbxName(d.project.name)}/${dbxName((d.audit?d.audit.title:'Project report')+'_'+today()+'.pdf')}`,blob,t:Date.now()});this._pdfq=(this._pdfq||0)+1;this.setState('offline');toast('Offline – the report will upload to Dropbox when you are back online',3500)}else{this.setState(e.kind==='noaccess'?'noaccess':'error',e.message);alertBox('Could not save the report to Dropbox: '+e.message)}}},
+ async flushPdfQueue(){const q=(await DB.all('meta')).filter(m=>m.id.startsWith('pdf:'));for(const m of q){await Dbx.upload(m.rel?Dbx.p(m.rel):m.path,m.blob);await DB.del('meta',m.id)}this._pdfq=0},
+ async uploadFullBackup(){const done=busy('Uploading full backup to Dropbox…');try{await Dbx.ensureFolder();const d=await buildBackup();const path=Dbx.p('/backups/full-'+`${today()}-${new Date().toTimeString().slice(0,5).replace(':','')}.json`);await Dbx.upload(path,new Blob([JSON.stringify(d)],{type:'application/json'}));toast('Backup saved to Dropbox: '+path,3500)}catch(e){alertBox('Backup upload failed: '+e.message)}finally{done()}}
 };
 function timeAgo(t){const s=(Date.now()-t)/1000;return s<45?'just now':s<3600?Math.round(s/60)+' min ago':s<86400?Math.round(s/3600)+' h ago':fmtDate(t)}
 function safeRender(){const a=document.activeElement;if(a&&a.closest&&a.closest('#app')&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)){toast('Synced changes from another device – they appear when you leave this field',2500);return}if(document.querySelector('.modal-back,.annot,.report-frame')||(UI.viewer&&UI.viewer.adding&&location.hash.startsWith('#/drawing')))return;render()}
-function dbxSettingsHTML(){const t=Dbx.tok(),pr=Dbx.prefs(),ru=Dbx.redirectUri(),con=Dbx.connected(),lk=localStorage.getItem('sap.dbx.key')||'';
- const chk=(k,l)=>`<label class="chk"><input type="checkbox" name="${k}" data-change="dbx-opt" ${pr[k]?'checked':''}> ${l}</label>`;
- return`<div class="card pad" style="margin-top:16px" id="dbx-card"><h2 style="margin-top:0;font-size:17px;display:flex;align-items:center;gap:8px"><svg viewBox="0 0 24 24" width="22" height="22" fill="#0061fe"><path d="M6 2 0 6l6 4 6-4zm12 0-6 4 6 4 6-4zM0 14l6 4 6-4-6-4zm18-4-6 4 6 4 6-4zM6 19.3l6 4 6-4-6-4z"/></svg>Dropbox sync & backup</h2>
- <p class="muted small" style="margin-top:0">Sync projects, audits, issues, photos and drawings between your laptop, tablet and phone through <b>your own Dropbox</b> (stored in <i>Apps › your app name</i>). Generated PDF reports can be saved to <i>/reports</i> automatically.</p>
- <div class="form-grid"><label><span>Dropbox App key</span><input data-change="dbx-key" value="${esc(lk)}" placeholder="${DROPBOX_APP_KEY?'Built-in: '+esc(DROPBOX_APP_KEY):'e.g. abc123xyz456789'}" autocomplete="off" spellcheck="false"></label>
- <label><span>Redirect URI to add in the Dropbox app console</span><input readonly value="${esc(ru||'Not needed for a local file – uses the paste-code flow')}" onfocus="this.select()"></label></div>
- ${con?`<div class="hint" style="background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a;margin:14px 0 10px">Connected as <b>${esc(t.account&&t.account.name||'Dropbox user')}</b>${t.account&&t.account.email?' · '+esc(t.account.email):''}<br><span id="dbx-status" class="small"></span></div>
- <div class="actions"><button class="btn primary" data-act="dbx-sync">Sync now</button><button class="btn" data-act="dbx-backup">${ic('upload')} Upload full backup</button><button class="btn danger" data-act="dbx-disconnect">Disconnect</button></div>`
- :`<div class="actions" style="margin-top:14px"><button class="btn primary" data-act="dbx-connect">Connect Dropbox</button>${ru?`<button class="btn" data-act="dbx-connect-code" title="Use if the redirect URI is not registered">Connect with code</button>`:''}</div>`}
- <div class="form-grid" style="margin-top:14px">${chk('autoSync','Auto-sync changes (and when back online)')}${chk('autoPdf','Save generated PDF reports to Dropbox automatically')}${chk('photos','Back up photos, drawings & annotations to Dropbox')}</div>
- <p class="help">Dropbox app settings: Scoped access · App folder · permissions <code>account_info.read</code>, <code>files.metadata.read</code>, <code>files.metadata.write</code>, <code>files.content.read</code>, <code>files.content.write</code>. See DROPBOX-SETUP.md.</p></div>`}
+function fixNumbers(pid){/* two users created issues at the same moment → same number. Deterministic: earliest (createdAt,id) keeps it, later ones get next free numbers */
+ const its=projItems(pid).slice().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)||(a.id<b.id?-1:1));const seen=new Set();let max=its.reduce((m,i)=>Math.max(m,i.number||0),0);const fix=[];
+ for(const i of its){if(seen.has(i.number))fix.push(i);else seen.add(i.number)}
+ return(async()=>{for(const i of fix){const old=i.number;i.number=++max;await save('items',i,{keepBy:true});toast(`Issue #${old} “${i.title||'Untitled'}” was renumbered to #${i.number} (numbered at the same time on another device)`,4000)}return fix.length})()}
+const DBX_LOGO='<svg viewBox="0 0 24 24" width="22" height="22" fill="#0061fe"><path d="M6 2 0 6l6 4 6-4zm12 0-6 4 6 4 6-4zM0 14l6 4 6-4-6-4zm18-4-6 4 6 4 6-4zM6 19.3l6 4 6-4-6-4z"/></svg>';
+function dbxSettingsHTML(){const t=Dbx.tok(),con=Dbx.connected(),a=t&&t.account||{};
+ return`<div class="card pad" style="margin-top:16px" id="dbx-card"><h2 style="margin-top:0;font-size:17px;display:flex;align-items:center;gap:8px">${DBX_LOGO}Company Dropbox sync</h2>
+ ${!Dbx.configured()?`<div class="hint">Dropbox sync has not been set up in this version of the app yet. Please contact your administrator.</div>`
+ :con?`<div class="hint" style="background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a;margin:0 0 10px">Connected as <b>${esc(a.name||'Dropbox user')}</b>${a.email?' · '+esc(a.email):''}${a.team&&a.team.name?`<br>Team: <b>${esc(a.team.name)}</b>`:''}<br><span id="dbx-status" class="small"></span></div>
+  ${Sync.state==='noaccess'?`<div class="hint" style="background:#fef2f2;border-color:#fecaca;color:#991b1b;margin-bottom:10px">${esc(Sync.msg||NOACCESS_MSG)}</div>`:''}
+  <div class="actions"><button class="btn primary" data-act="dbx-sync">Sync now</button><button class="btn danger" data-act="dbx-disconnect">Disconnect</button></div>`
+ :`<p class="muted small" style="margin-top:0">Sign in with your <b>company Dropbox account</b> to share projects, issues, photos and reports with your team. Your data syncs automatically, and PDF reports are saved to the company folder.</p><div class="actions"><button class="btn primary" data-act="dbx-connect">Connect Dropbox</button></div>`}</div>`}
+function viewDbxAdmin(){const t=Dbx.tok(),loc=Dbx.loc||JSON.parse(localStorage.getItem('sap.dbx.loc')||'null'),lk=localStorage.getItem('sap.dbx.key')||'';
+ const row=(k,v)=>`<dt>${esc(k)}</dt><dd style="word-break:break-all">${v}</dd>`;const code=v=>`<code>${esc(v==null||v===''?'—':typeof v==='string'?v:JSON.stringify(v))}</code>`;
+ return`${crumbs([['Settings','#/settings'],['Dropbox admin / debug']])}<div class="page-head"><h1>Dropbox admin / debug<span class="sub">Hidden troubleshooting page (#dbx-admin). Not linked in the app.</span></h1></div>
+ <div class="card pad"><dl class="kv">${row('Built-in App key',code(DROPBOX_APP_KEY===KEY_PLACEHOLDER?'(placeholder – not configured)':DROPBOX_APP_KEY))}${row('Override App key (this device)',code(lk))}${row('Effective App key',code(Dbx.key()))}
+ ${row('Redirect URI (register exactly)',code(Dbx.redirectUri()||'file:// – paste-code flow'))}${row('Root folder (build constant)',code(DROPBOX_ROOT_FOLDER))}${row('Team ID lock',code(DROPBOX_TEAM_ID))}${row('Allowed e-mail domains',code(ALLOWED_EMAIL_DOMAINS))}
+ ${row('Account',code(t&&t.account))}${row('Resolved folder',code(loc&&loc.folder))}${row('Resolved via',code(loc&&loc.how))}${row('Path root namespace',code(loc&&loc.root))}${row('root / home namespace',code(loc?[loc.rootNs,loc.homeNs]:null))}${row('Team space',code(loc&&loc.teamSpace))}
+ ${row('Sync state',code(Sync.state+(Sync.msg?' – '+Sync.msg:'')))}${row('Last sync',code(SM&&SM.lastSync?fmtDT(SM.lastSync):'never'))}${row('Pending bundles',code(SM?Object.keys(SM.dirty):[]))}${row('Known remote files',code(SM?Object.keys(SM.revs).length+' data, '+Object.keys(SM.photoRev).length+' photos':''))}${row('Tombstones',code(TOMBS.size))}</dl>
+ <div class="form-grid" style="margin-top:14px"><label><span>Override App key on this device (leave empty to use the built-in key)</span><input data-change="dbx-key" value="${esc(lk)}" autocomplete="off" spellcheck="false"></label></div>
+ <div class="actions" style="margin-top:14px">${Dbx.connected()?`<button class="btn primary" data-act="dbx-sync">Sync now</button><button class="btn" data-act="dbx-recheck">Re-check folder</button><button class="btn" data-act="dbx-resync">Full re-sync</button><button class="btn" data-act="dbx-backup">Upload full backup</button><button class="btn danger" data-act="dbx-disconnect">Disconnect</button>`:`<button class="btn primary" data-act="dbx-connect">Connect (redirect)</button><button class="btn" data-act="dbx-connect-code">Connect with code</button>`}</div>
+ <p class="help">Scopes required: account_info.read, files.metadata.read, files.metadata.write, files.content.read, files.content.write, team_info.read. App type: Scoped access, Full Dropbox.</p></div>`}
 
 /* ===== Init ===== */
 (async()=>{try{await DB.open();await loadAll();await seed();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{})}catch(e){console.error(e);$('#app').innerHTML=emptyHTML('Storage unavailable','This browser blocked local storage (IndexedDB), e.g. in private mode. '+e.message);return}
- window.addEventListener('hashchange',render);await Dbx.handleRedirect();render();Sync.pill();window.__ready=true;
- if(Dbx.connected()){Sync.now()}
+ {const t=Dbx.tok();if(t&&t.v!==2){Dbx.setTok(null);localStorage.removeItem('sap.dbx.loc');await Sync.resetMeta()}}
+ window.addEventListener('hashchange',render);const fromLogin=await Dbx.handleRedirect();render();Sync.pill();window.__ready=true;
+ if(!fromLogin&&Dbx.connected()&&Dbx.configured()){Sync.now()}
  window.addEventListener('online',()=>{if(Dbx.connected())Sync.now()});window.addEventListener('offline',()=>{if(Dbx.connected())Sync.setState('offline')});
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&Dbx.connected()&&Dbx.prefs().autoSync&&Date.now()-(SM.lastSync||0)>60000)Sync.now()});
  setInterval(()=>{if(Dbx.connected()&&Dbx.prefs().autoSync&&document.visibilityState==='visible'&&navigator.onLine)Sync.now();Sync.pill()},180000);setInterval(()=>Sync.pill(),30000);
