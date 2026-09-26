@@ -168,6 +168,27 @@ code{background:#f1f5f9;padding:1px 5px;border-radius:5px;font-size:12px}
 .trade-row .tb{height:8px;background:var(--accl);border-radius:4px;overflow:hidden}.trade-row .tb i{display:block;height:100%;background:var(--acc);border-radius:4px}
 .trade-row .tc{color:var(--mut);font-size:13px;white-space:nowrap}
 @media (max-width:760px){.cls-grid{grid-template-columns:1fr}.trade-row{grid-template-columns:1fr auto;gap:4px 10px}.trade-row .tb{grid-column:1/-1;grid-row:2}}
+/* first-run welcome / onboarding */
+body.wl-mode .topnav{display:none}
+.welcome{max-width:480px;margin:12px auto 40px;display:flex;flex-direction:column;gap:14px}
+.wl-head{text-align:center;padding:10px 8px 2px}
+.wl-logo{width:60px;height:60px;border-radius:16px;background:var(--acc);color:#fff;display:inline-grid;place-items:center;box-shadow:var(--sh)}
+.wl-head h1{margin:12px 0 6px;font-size:28px}.wl-head p{margin:0;color:var(--mut);font-size:15.5px;line-height:1.45}
+.wl-card{padding:20px 18px;display:flex;flex-direction:column;gap:12px;text-align:left}
+.wl-card h2{margin:0;font-size:19px}.wl-card p{margin:2px 0 0;line-height:1.45}
+.wl-step{display:flex;gap:12px;align-items:flex-start}
+.wl-num{flex:0 0 30px;height:30px;border-radius:50%;background:var(--accl);color:var(--acc);font-weight:700;display:grid;place-items:center}
+.wl-big{width:100%;justify-content:center;padding:14px 18px;font-size:16.5px;border-radius:12px;min-height:52px}
+.wl-dbx{background:#fff;border-radius:6px;display:inline-grid;place-items:center;width:28px;height:28px;margin-right:4px}
+.wl-notes{margin:2px 0 0;padding:0 0 0 18px;color:#334155;font-size:14px;line-height:1.5}.wl-notes li+li{margin-top:6px}
+.wl-msg{border-radius:10px;padding:10px 12px;font-size:14.5px;line-height:1.45}
+.wl-msg.bad{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+#wl-ok,#wl-connecting{text-align:center;align-items:center}
+.wl-badge{width:64px;height:64px;border-radius:50%;background:var(--accl);color:var(--acc);display:grid;place-items:center}
+.wl-badge.ok{background:#dcfce7;color:var(--ok)}
+.wl-spin{width:28px;height:28px;border:3px solid var(--accl);border-top-color:var(--acc);border-radius:50%;animation:wlspin .8s linear infinite}
+@keyframes wlspin{to{transform:rotate(360deg)}}
+.wl-foot{text-align:center}.wl-skip{appearance:none;background:none;border:0;color:var(--acc);font:inherit;font-weight:600;font-size:15px;padding:10px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 
 </style>
 </head>
@@ -949,11 +970,11 @@ const notFound=()=>emptyHTML('Not found','This record no longer exists.',`<a cla
 let lastRoute='';
 function parseHash(){const h=location.hash.replace(/^#\/?/,'');const [path,qs]=h.split('?');return{parts:path.split('/').filter(Boolean),params:Object.fromEntries(new URLSearchParams(qs||''))}}
 function render(){const {parts,params}=parseHash();UI.after=[];UI.list=null;let html;
- try{switch(parts[0]){case 'project':html=viewProject(parts[1]);break;case 'audit':html=viewAudit(parts[1],params);break;case 'item':html=viewItem(parts[1]);break;case 'drawing':html=viewDrawing(parts[1],params);break;case 'templates':html=viewTemplates();break;case 'settings':html=viewSettings();break;case 'dbx-admin':html=viewDbxAdmin();break;default:html=viewHome()}}
+ try{switch(parts[0]){case 'project':html=viewProject(parts[1]);break;case 'audit':html=viewAudit(parts[1],params);break;case 'item':html=viewItem(parts[1]);break;case 'drawing':html=viewDrawing(parts[1],params);break;case 'templates':html=viewTemplates();break;case 'settings':html=viewSettings();break;case 'dbx-admin':html=viewDbxAdmin();break;default:html=Welcome.wants()?viewWelcome():viewHome()}}
  catch(e){console.error(e);html=emptyHTML('Something went wrong',e.message)}
  const app=$('#app'),key=parts.join('/'),y=scrollY;app.innerHTML=html;scrollTo(0,key===lastRoute?y:0);lastRoute=key;
  $$('.topnav a').forEach(a=>a.classList.toggle('on',a.dataset.nav===(parts[0]==='templates'||parts[0]==='settings'?parts[0]:parts[0]==='dbx-admin'?'settings':'projects')));
- UI.after.forEach(f=>f());hydrate();Sync.pill()}
+ document.body.classList.toggle('wl-mode',!!app.querySelector('.welcome'));UI.after.forEach(f=>f());hydrate();Sync.pill()}
 const cropCache=new Map();
 function hydrate(root=document){$$('img[data-photo]',root).forEach(async im=>{if(im.src)return;const p=await getPhoto(im.dataset.photo);if(p)im.src=p.data});
  $$('img[data-pincrop]',root).forEach(async im=>{const it=byId('items',im.dataset.pincrop);if(!it||!it.pin)return;const d=byId('drawings',it.pin.drawingId);if(!d)return;const k=it.id+it.pin.x+it.pin.y+it.status;let u=cropCache.get(k);if(!u){const c=await drawingCanvas(d,[it],{crop:it.pin,maxW:600});u=c.toDataURL('image/jpeg',.85);cropCache.set(k,u)}im.src=u})}
@@ -1286,19 +1307,19 @@ const Dbx={loc:null,
  redirectUri(){return/^https?:$/.test(location.protocol)?location.origin+location.pathname:null},
  p(rel){if(!this.loc)throw new DbxErr(NOACCESS_MSG,'noaccess');return this.loc.folder+rel},
  async pkce(){const v=b64url(crypto.getRandomValues(new Uint8Array(48)));try{return{v,ch:b64url(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)))),m:'S256'}}catch(e){return{v,ch:v,m:'plain'}}},
- async connect(manual){const key=this.key();if(!key)return alertBox('Dropbox sync has not been set up in this version of the app yet. Please contact your administrator.','Dropbox');
+ async connect(manual,from){const key=this.key();if(!key)return alertBox('Dropbox sync has not been set up in this version of the app yet. Please contact your administrator.','Dropbox');
   const{v,ch,m}=await this.pkce();const state=b64url(crypto.getRandomValues(new Uint8Array(16)));const ru=manual?null:this.redirectUri();
   const u=new URL(DBX_AUTH);Object.entries({client_id:key,response_type:'code',code_challenge:ch,code_challenge_method:m,token_access_type:'offline',scope:'account_info.read files.metadata.read files.metadata.write files.content.read files.content.write',state}).forEach(([k,x])=>u.searchParams.set(k,x));
   if(localStorage.getItem('sap.dbx.reauth')){u.searchParams.set('force_reauthentication','true');localStorage.removeItem('sap.dbx.reauth')}
-  if(ru){u.searchParams.set('redirect_uri',ru);localStorage.setItem('sap.dbx.pkce',JSON.stringify({v,state,ru,t:Date.now()}));location.href=u.toString();return}
+  if(ru){u.searchParams.set('redirect_uri',ru);localStorage.setItem('sap.dbx.pkce',JSON.stringify({v,state,ru,t:Date.now(),from:from||null}));location.href=u.toString();return}
   u.searchParams.delete('state');window.open(u.toString(),'_blank');
   const r=await formModal('Connect Dropbox',[{k:'code',label:'Authorization code',req:true,full:true,ph:'Paste the code from Dropbox'}],{},{ok:'Connect',extra:`<p class="help">A Dropbox page opened in a new tab. Sign in with your <b>company</b> Dropbox account, click <b>Allow</b>, then copy the code and paste it here. <a href="${esc(u.toString())}" target="_blank" rel="noopener">Open the Dropbox page again</a></p>`});
-  if(!r)return;const done=busy('Connecting to Dropbox…');try{await this.exchange(r.code.trim(),v,null)}catch(e){alertBox('Dropbox connection failed: '+e.message)}finally{done()}},
+  if(!r)return;const done=busy('Connecting to Dropbox…');try{await this.exchange(r.code.trim(),v,null)}catch(e){Welcome.fail('Dropbox connection failed: '+e.message)||alertBox('Dropbox connection failed: '+e.message)}finally{done()}},
  async handleRedirect(){const q=new URLSearchParams(location.search);if(!q.has('code')&&!q.has('error'))return false;let saved=null;try{saved=JSON.parse(localStorage.getItem('sap.dbx.pkce')||'null')}catch(e){}localStorage.removeItem('sap.dbx.pkce');
-  history.replaceState(null,'',location.pathname+'#/settings');
-  if(q.get('error')){toast('Dropbox: '+(q.get('error_description')||q.get('error')),4000);return true}
-  if(!saved||saved.state!==q.get('state')){alertBox('Dropbox sign-in could not be verified. Please try Connect again.');return true}
-  const done=busy('Connecting to Dropbox…');try{await this.exchange(q.get('code'),saved.v,saved.ru)}catch(e){alertBox('Dropbox connection failed: '+e.message)}finally{done()}return true},
+  history.replaceState(null,'',location.pathname+(saved&&saved.from||'#/settings'));
+  if(q.get('error')){const m=q.get('error')==='access_denied'?'Dropbox sign-in was cancelled. Tap Connect Dropbox to try again.':'Dropbox: '+(q.get('error_description')||q.get('error'));if(!Welcome.fail(m))toast(m,4000);return true}
+  if(!saved||saved.state!==q.get('state')){const m='Dropbox sign-in could not be verified. Please try Connect again.';Welcome.fail(m)||alertBox(m);return true}
+  const done=busy('Connecting to Dropbox…');try{await this.exchange(q.get('code'),saved.v,saved.ru)}catch(e){Welcome.fail('Dropbox connection failed: '+e.message)||alertBox('Dropbox connection failed: '+e.message)}finally{done()}return true},
  accountProblem(a){if(!a.team)return`Site Inspection only works with your company Dropbox account. You signed in with a personal Dropbox account${a.email?' ('+a.email+')':''}. Please connect again and sign in with your work account.`;
   if(DROPBOX_TEAM_ID&&a.team.id!==DROPBOX_TEAM_ID)return`The Dropbox account ${a.email||''} belongs to a different team (“${a.team.name||a.team.id}”). Please sign in with your company Dropbox account.`;
   const doms=ALLOWED_EMAIL_DOMAINS.split(',').map(x=>x.trim().toLowerCase().replace(/^@/,'')).filter(Boolean);
@@ -1308,11 +1329,11 @@ const Dbx={loc:null,
   if(!r.ok||!j.access_token)throw new DbxErr(j.error_description||j.error||('Token request failed ('+r.status+')'),'auth',r.status);
   this.setTok({v:2,access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()+(j.expires_in||14400)*1000-60000,account_id:j.account_id});
   let a;try{a=await this.rpc('users/get_current_account')}catch(e){this.setTok(null);throw e}
-  const bad=this.accountProblem(a);if(bad){await this.revoke();this.setTok(null);localStorage.setItem('sap.dbx.reauth','1');render();alertBox(bad,'Company account required');return}
+  const bad=this.accountProblem(a);if(bad){await this.revoke();this.setTok(null);localStorage.setItem('sap.dbx.reauth','1');if(Welcome.fail(bad))return;render();alertBox(bad,'Company account required');return}
   const t=this.tok();t.account={name:a.name&&a.name.display_name,email:a.email,team:{id:a.team.id,name:a.team.name}};this.setTok(t);
-  this.loc=null;localStorage.removeItem('sap.dbx.loc');await Sync.resetMeta();Sync.markAllDirty();Sync.setState('idle');toast('Dropbox connected');render();
-  try{await this.ensureFolder()}catch(e){if(e.kind==='noaccess'){Sync.setState('noaccess',e.message);render();alertBox(e.message,'Company folder');return}}
-  Sync.now(true)},
+  this.loc=null;localStorage.removeItem('sap.dbx.loc');await Sync.resetMeta();Sync.markAllDirty();Sync.setState('idle');const wf=Welcome.flow();if(wf)Welcome.set({stage:'connecting'});toast('Dropbox connected');render();
+  try{await this.ensureFolder()}catch(e){if(e.kind==='noaccess'){Sync.setState('noaccess',e.message);if(wf){Welcome.set({stage:'noaccess',msg:e.message});render();return}render();alertBox(e.message,'Company folder');return}}
+  if(wf){Welcome.set({stage:'ok'});render()}Sync.now(true)},
  async revoke(){try{const t=this.tok();if(t&&t.access_token)await fetch(DBX_API+'auth/token/revoke',{method:'POST',headers:{Authorization:'Bearer '+t.access_token}})}catch(e){}},
  async disconnect(){if(!await confirmBox('Disconnect Dropbox on this device? Your local data and the company folder are kept.','Disconnect'))return;
   await this.revoke();this.setTok(null);this.loc=null;localStorage.removeItem('sap.dbx.loc');await Sync.resetMeta();Sync.setState('idle');toast('Dropbox disconnected');render()},
@@ -1471,6 +1492,38 @@ function viewDbxAdmin(){const t=Dbx.tok(),loc=Dbx.loc||JSON.parse(localStorage.g
  <div class="form-grid" style="margin-top:14px"><label><span>Override App key on this device (leave empty to use the built-in key)</span><input data-change="dbx-key" value="${esc(lk)}" autocomplete="off" spellcheck="false"></label></div>
  <div class="actions" style="margin-top:14px">${Dbx.connected()?`<button class="btn primary" data-act="dbx-sync">Sync now</button><button class="btn" data-act="dbx-recheck">Re-check folder</button><button class="btn" data-act="dbx-resync">Full re-sync</button><button class="btn" data-act="dbx-backup">Upload full backup</button><button class="btn danger" data-act="dbx-disconnect">Disconnect</button>`:`<button class="btn primary" data-act="dbx-connect">Connect (redirect)</button><button class="btn" data-act="dbx-connect-code">Connect with code</button>`}</div>
  <p class="help">Scopes required: account_info.read, files.metadata.read, files.metadata.write, files.content.read, files.content.write (no team scopes). App type: Scoped access, Full Dropbox.</p></div>`}
+
+/* ===== First-run welcome / onboarding (shown on the home route while Dropbox is not connected) =====
+ State: sessionStorage sap.welcome = {stage:'connecting'|'ok'|'noaccess'|'error', msg}; localStorage sap.welcome.skip = '1' after "Continue offline". */
+const Welcome={
+ st(){try{return JSON.parse(sessionStorage.getItem('sap.welcome')||'null')}catch(e){return null}},
+ set(s){try{if(s)sessionStorage.setItem('sap.welcome',JSON.stringify(s));else sessionStorage.removeItem('sap.welcome')}catch(e){}},
+ skipped(){return localStorage.getItem('sap.welcome.skip')==='1'},
+ onHome(){return!parseHash().parts[0]},
+ wants(){if(!Dbx.configured())return false;const s=this.st();if(Dbx.connected())return!!(s&&['connecting','ok','noaccess'].includes(s.stage));return!this.skipped()},
+ flow(){return this.onHome()&&Dbx.configured()&&!this.skipped()},
+ fail(msg){if(!this.flow())return false;this.set({stage:'error',msg});render();return true}};
+const WL_CHECK='<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>';
+function viewWelcome(){const s=Welcome.st()||{},con=Dbx.connected(),a=(Dbx.tok()||{}).account||{},folder=rootName();
+ const doms=ALLOWED_EMAIL_DOMAINS.split(',').map(x=>x.trim().replace(/^@/,'')).filter(Boolean),acct=doms.length?doms.map(d=>`<b>@${esc(d)}</b>`).join(' or ')+' company':'<b>company</b>';
+ const skip=`<div class="wl-foot"><button class="wl-skip" data-act="welcome-skip">Continue offline without Dropbox</button><div class="help">You can connect later in Settings. Offline data stays on this device only.</div></div>`;
+ let body;
+ if(con&&s.stage==='connecting')body=`<div class="card wl-card" id="wl-connecting"><div class="wl-badge"><span class="wl-spin"></span></div><h2>Connecting…</h2><p class="muted">Checking your access to the shared “${esc(folder)}” folder.</p></div>`;
+ else if(con&&s.stage==='ok'){onAfter(()=>{clearTimeout(Welcome._t);Welcome._t=setTimeout(()=>{const x=Welcome.st();if(x&&x.stage==='ok'&&$('#wl-ok')){Welcome.set(null);render()}},6000)});
+  body=`<div class="card wl-card" id="wl-ok"><div class="wl-badge ok">${WL_CHECK}</div><h2>You're connected</h2><p>Your team's projects will appear here.${a.email?`<br><span class="muted small">Signed in as ${esc(a.email)}</span>`:''}</p><button class="btn primary wl-big" data-act="welcome-done">Open projects</button></div>`}
+ else if(con&&s.stage==='noaccess')body=`<div class="card wl-card" id="wl-noaccess"><div class="wl-msg bad">${esc(s.msg||NOACCESS_MSG)}</div><p class="muted small" style="margin:0 0 14px">Signed in as ${esc(a.email||a.name||'Dropbox user')}. Once your admin has shared the “${esc(folder)}” folder with you, tap Check again.</p><button class="btn primary wl-big" data-act="welcome-recheck">Check again</button><button class="btn wl-big" data-act="welcome-switch">Use a different Dropbox account</button></div>${skip}`;
+ else body=`<div class="card wl-card" id="wl-connect">${s.stage==='error'&&s.msg?`<div class="wl-msg bad">${esc(s.msg)}</div>`:''}
+  <div class="wl-step"><span class="wl-num">1</span><div><h2>Connect your company Dropbox</h2><p class="muted">Sign in with your ${acct} Dropbox account.</p></div></div>
+  <button class="btn primary wl-big" data-act="welcome-connect"><span class="wl-dbx">${DBX_LOGO}</span>Connect Dropbox</button>
+  <ul class="wl-notes"><li><b>Only the shared folder.</b> The app only uses the company “${esc(folder)}” folder – nothing else in your Dropbox.</li><li><b>What happens next:</b> your team's projects, issues and photos sync automatically, and PDF reports are saved to the shared folder.</li></ul></div>${skip}`;
+ return`<div class="welcome"><div class="wl-head"><span class="wl-logo">${WL_CHECK}</span><h1>Site Inspection</h1><p>Log site inspections, snags and photos on site and share them with your team.</p></div>${body}</div>`}
+Object.assign(ACT,{
+ 'welcome-connect':()=>{Welcome.set(null);return Dbx.connect(false,'#/')},
+ 'welcome-skip':()=>{localStorage.setItem('sap.welcome.skip','1');Welcome.set(null);render();toast('Working offline – connect Dropbox any time in Settings',3000)},
+ 'welcome-done':()=>{clearTimeout(Welcome._t);Welcome.set(null);render()},
+ 'welcome-recheck':async()=>{const done=busy('Checking folder access…');Dbx.loc=null;localStorage.removeItem('sap.dbx.loc');
+  try{await Dbx.ensureFolder();Sync.setState('idle');Welcome.set({stage:'ok'});Sync.now(true)}catch(e){Welcome.set({stage:'noaccess',msg:e.kind==='noaccess'?e.message:'Could not check the folder: '+e.message})}finally{done()}render()},
+ 'welcome-switch':async()=>{await Dbx.revoke();Dbx.setTok(null);Dbx.loc=null;localStorage.removeItem('sap.dbx.loc');await Sync.resetMeta();Sync.setState('idle');localStorage.setItem('sap.dbx.reauth','1');Welcome.set(null);return Dbx.connect(false,'#/')}});
 
 /* ===== Init ===== */
 (async()=>{try{await DB.open();await loadAll();await seed();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{})}catch(e){console.error(e);$('#app').innerHTML=emptyHTML('Storage unavailable','This browser blocked local storage (IndexedDB), e.g. in private mode. '+e.message);return}
