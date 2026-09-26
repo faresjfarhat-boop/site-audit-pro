@@ -154,6 +154,20 @@ textarea{min-height:90px;resize:vertical}
 .sync-pill+.topnav{margin-left:8px}
 code{background:#f1f5f9;padding:1px 5px;border-radius:5px;font-size:12px}
 @media (max-width:760px){.sync-pill{font-size:11.5px;padding:4px 9px}.brand small{display:none}}
+/* issue classification (trade / subcategory / defect type) */
+.cls-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 14px}
+.cls-grid label input{margin-top:4px}
+.cls-grid select:disabled{color:var(--mut);background:#f3f5f8}
+.meta .defect{color:#b45309;font-weight:600}
+.trades{margin:10px 0 6px;padding:12px 14px}
+.trades-h{font-size:12.5px;font-weight:600;text-transform:uppercase;color:var(--mut);letter-spacing:.03em;margin-bottom:6px}
+.trade-row{display:grid;grid-template-columns:minmax(110px,220px) 1fr auto;gap:10px;align-items:center;padding:6px 0;font-size:14px;border-top:1px solid var(--bd)}
+.trades-h+.trade-row{border-top:0}
+.trade-row.clk{cursor:pointer}.trade-row.clk:hover .tn{color:var(--acc)}
+.trade-row .tn{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trade-row .tb{height:8px;background:var(--accl);border-radius:4px;overflow:hidden}.trade-row .tb i{display:block;height:100%;background:var(--acc);border-radius:4px}
+.trade-row .tc{color:var(--mut);font-size:13px;white-space:nowrap}
+@media (max-width:760px){.cls-grid{grid-template-columns:1fr}.trade-row{grid-template-columns:1fr auto;gap:4px 10px}.trade-row .tb{grid-column:1/-1;grid-row:2}}
 
 </style>
 </head>
@@ -603,6 +617,46 @@ const PRIO_COLOR={Low:'#64748b',Medium:'#0284c7',High:'#ea580c',Critical:'#7f1d1
 const WEATHER=['','Sunny','Clear','Partly cloudy','Cloudy','Hot / humid','Windy','Dusty / sandstorm','Rain','Fog','Indoor'];
 const THEMES={'Blue':'#0b5cab','Teal':'#0f766e','Charcoal':'#374151','Orange':'#c2410c','Red':'#b91c1c','Purple':'#6d28d9','Green':'#15803d'};
 const DEFAULT_CATS=['General','Structural','Civil / Concrete','Blockwork / Plaster','Electrical','Plumbing / Drainage','HVAC / MEP','Fire Safety','Finishes','Painting','Tiling','Flooring','Joinery / Carpentry','Doors & Windows','Glazing / Facade','Waterproofing','Landscaping / External','Health & Safety','Cleaning'];
+/* ===== Issue classification taxonomy: Trade → Subcategory → Defect type =====
+ Single source of truth – edit this object to change the built-in lists. Issues store: category (= Trade; legacy field
+ name kept for existing data/sync), subcategory, defectType. "Other" is appended to every defect list automatically.
+ taxonomyList() gives a flat [{trade,subcategory,defectType}] list for reuse (e.g. AI photo / voice classification). */
+const TAX_OTHER='Other';
+const TAXONOMY={
+ 'Mechanical':{
+  'HVAC equipment (AHU, FCU, chillers, split units)':['Damaged unit','Noise / vibration','Not commissioned','Missing label'],
+  'Ductwork':['Damaged / dented','Poor sealing / leaks','Missing insulation','Inadequate support'],
+  'Grilles and diffusers':['Misaligned','Missing','Damaged','Dirty'],
+  'Chilled water piping':['Leak','Condensation','Missing insulation','Missing valve tag'],
+  'Plumbing – water supply':['Leak','Low pressure','Missing isolation valve','Pipe not secured'],
+  'Drainage':['Blocked','Leak','Wrong slope','Missing trap'],
+  'Sanitary fixtures (WC, basin, shower)':['Loose','Damaged','Missing sealant','Not working'],
+  'Ventilation and extract fans':['Not working','Noisy','Missing backdraft damper'],
+  'BMS and controls':['Sensor faulty / missing','Thermostat not working','Wiring not terminated']},
+ 'Electrical':{
+  'Distribution boards':['Missing labels','Missing cover','Loose terminations','No circuit schedule'],
+  'Cabling and containment':['Exposed cable','Damaged trunking / tray','Poor support','Missing cover'],
+  'Small power (sockets, isolators)':['Loose','Damaged','Wrong height','Not working','Missing faceplate'],
+  'Lighting':['Not working','Misaligned','Damaged fitting','Missing lamp / diffuser'],
+  'Emergency lighting':['Not working','Missing exit sign','Failed battery test'],
+  'Earthing and bonding':['Missing bonding','Loose earth connection'],
+  'Low current (data, CCTV, access control, intercom)':['Not terminated','Not working','Missing device'],
+  'Switches and dimmers':['Not working','Misaligned','Wrong location']},
+ 'Fire and life safety':{
+  'Fire alarm (detectors, call points, sounders)':['Missing','Damaged','Covered','Not working','Wrong location'],
+  'Sprinklers':['Head missing / damaged','Painted head','Obstruction','Leak','Missing escutcheon'],
+  'Fire stopping and penetrations':['Missing','Incomplete','Unapproved material'],
+  'Fire doors':['Gap too large','Closer not working','Damaged seals','Missing signage','Held open'],
+  'Fire extinguishers and hose reels':['Missing','Expired','Not mounted','Blocked access'],
+  'Fire dampers':['No access panel','Not tested','Damaged'],
+  'Smoke control and pressurisation':['Fan not working','Damper faulty'],
+  'Escape routes and signage':['Blocked route','Missing / wrong signage']}};
+const taxTrades=()=>Object.keys(TAXONOMY);
+const taxSubs=t=>t&&TAXONOMY[t]?Object.keys(TAXONOMY[t]):[];
+const taxDefects=(t,s)=>t&&s&&TAXONOMY[t]&&TAXONOMY[t][s]?[...TAXONOMY[t][s].filter(x=>x!==TAX_OTHER),TAX_OTHER]:[];
+const taxonomyList=()=>taxTrades().flatMap(t=>taxSubs(t).flatMap(s=>taxDefects(t,s).map(d=>({trade:t,subcategory:s,defectType:d}))));
+const subShort=s=>String(s||'').replace(/\s*\([^)]*\)\s*$/,'');
+const clsParts=i=>[i.category,i.subcategory,i.defectType].filter(Boolean);
 const isOver=i=>i.status!=='Closed'&&i.dueDate&&i.dueDate<today();
 const stCls=s=>s==='In Progress'?'st-In':'st-'+s;
 const stBadge=s=>`<span class="badge ${stCls(s)}">${esc(s)}</span>`;
@@ -775,21 +829,37 @@ function viewHome(){
   <div class="progress" title="${cl}/${it.length} closed"><i style="width:${it.length?cl/it.length*100:0}%"></i></div></div>`}).join('');
  onAfter(()=>{const q=$('#home-q');if(q){q.oninput=()=>{UI.homeQ=q.value.toLowerCase();$$('.pcard').forEach(c=>c.style.display=c.dataset.search.includes(UI.homeQ)?'':'none')};if(UI.homeQ)q.oninput()}});
  return`<div class="page-head"><h1>Projects<span class="sub">${S.projects.length} project${S.projects.length===1?'':'s'} · ${S.audits.length} inspection${S.audits.length===1?"":"s"} · ${S.items.length} issue${S.items.length===1?"":"s"}</span></h1><div class="actions"><button class="btn primary" data-act="new-project">${ic('plus')} New project</button></div></div>
- ${S.items.length?statsHTML(S.items):''}
+ ${S.items.length?statsHTML(S.items)+tradeHTML(S.items):''}
  ${ps.length?`<div class="list-toolbar" style="margin-top:14px"><input type="search" id="home-q" placeholder="Search projects, clients, references…" value="${esc(UI.homeQ)}"></div><div class="grid cards">${cards}</div>`:emptyHTML('No projects yet','Create your first project, add an inspection and start logging issues with photos.',`<button class="btn primary" data-act="new-project">${ic('plus')} New project</button>`)}`}
 
 function itemRows(items){if(!items.length)return`<div class="empty">No issues match.</div>`;
  return items.map(i=>{const a=byId('audits',i.auditId),dr=i.pin&&byId('drawings',i.pin.drawingId);return`<a class="row" href="#/item/${i.id}"><div class="thumb">${i.photos&&i.photos.length?`<img data-photo="${i.photos[0]}" alt="">`:ic('camera')}</div>
- <div class="grow"><div class="t"><span class="num">#${i.number}</span>${esc(i.title||'Untitled issue')}</div><div class="meta">${i.location?`<span>${ic('pin')}${esc(i.location)}</span>`:''}${i.category?`<span>${esc(i.category)}</span>`:''}${i.assignee?`<span>${ic('user')}${esc(i.assignee)}</span>`:''}${i.dueDate?`<span class="${isOver(i)?'over':''}">${ic('cal')}${fmtDate(i.dueDate)}${isOver(i)?' (overdue)':''}</span>`:''}${UI.list&&UI.list.showAudit&&a?`<span>${ic('clip')}${esc(a.title)}</span>`:''}${i.photos&&i.photos.length>1?`<span>${ic('image')}${i.photos.length}</span>`:''}</div></div>
+ <div class="grow"><div class="t"><span class="num">#${i.number}</span>${esc(i.title||'Untitled issue')}</div><div class="meta">${i.location?`<span>${ic('pin')}${esc(i.location)}</span>`:''}${i.category?`<span class="cls" title="${esc(clsParts(i).join(' › '))}">${esc([i.category,subShort(i.subcategory)].filter(Boolean).join(' › '))}</span>`:''}${i.defectType?`<span class="defect">${esc(i.defectType)}</span>`:''}${i.assignee?`<span>${ic('user')}${esc(i.assignee)}</span>`:''}${i.dueDate?`<span class="${isOver(i)?'over':''}">${ic('cal')}${fmtDate(i.dueDate)}${isOver(i)?' (overdue)':''}</span>`:''}${UI.list&&UI.list.showAudit&&a?`<span>${ic('clip')}${esc(a.title)}</span>`:''}${i.photos&&i.photos.length>1?`<span>${ic('image')}${i.photos.length}</span>`:''}</div></div>
  <div class="ir-badges">${dr?`<span title="Pinned on ${esc(dr.name)}" style="color:var(--acc)">${ic('map')}</span>`:''}${prBadge(i.priority)}${stBadge(i.status)}</div></a>`}).join('')}
-function applyFilter(items,f){const q=(f.q||'').toLowerCase();let r=items.filter(i=>(!q||[i.title,i.description,i.location,i.category,i.assignee,'#'+i.number].join(' ').toLowerCase().includes(q))&&(!f.status||(f.status==='overdue'?isOver(i):f.status==='notclosed'?i.status!=='Closed':i.status===f.status))&&(!f.priority||i.priority===f.priority)&&(!f.category||i.category===f.category)&&(!f.assignee||i.assignee===f.assignee)&&(!f.location||i.location===f.location));
+function applyFilter(items,f){const q=(f.q||'').toLowerCase();let r=items.filter(i=>(!q||[i.title,i.description,i.location,i.category,i.subcategory,i.defectType,i.assignee,'#'+i.number].join(' ').toLowerCase().includes(q))&&(!f.status||(f.status==='overdue'?isOver(i):f.status==='notclosed'?i.status!=='Closed':i.status===f.status))&&(!f.priority||i.priority===f.priority)&&(!f.category||i.category===f.category)&&(!f.subcategory||i.subcategory===f.subcategory)&&(!f.defectType||i.defectType===f.defectType)&&(!f.assignee||i.assignee===f.assignee)&&(!f.location||i.location===f.location));
  const s={number:(a,b)=>a.number-b.number,newest:(a,b)=>b.createdAt-a.createdAt,updated:(a,b)=>b.updatedAt-a.updatedAt,priority:(a,b)=>PRIO_RANK[a.priority]-PRIO_RANK[b.priority]||a.number-b.number,status:(a,b)=>STATUSES.indexOf(a.status)-STATUSES.indexOf(b.status)||a.number-b.number,due:(a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999'),location:(a,b)=>(a.location||'').localeCompare(b.location||'')||a.number-b.number}[f.sort||'number'];return r.sort(s)}
-function itemListHTML(key,items,showAudit){const f=UI.filters[key]||(UI.filters[key]={q:'',status:'',priority:'',category:'',assignee:'',location:'',sort:'number'});UI.list={key,items,showAudit};
+function listToolbarHTML(f,items){const inT=items.filter(i=>!f.category||i.category===f.category),subs=uniq(inT.map(i=>i.subcategory)),defs=uniq(inT.filter(i=>!f.subcategory||i.subcategory===f.subcategory).map(i=>i.defectType));
  const sel=(k,label,opts)=>`<select data-change="flt" data-k="${k}" aria-label="${label}"><option value="">${label}</option>${opts.map(o=>Array.isArray(o)?o:[o,o]).map(([v,t])=>`<option value="${esc(v)}" ${f[k]===v?'selected':''}>${esc(t)}</option>`).join('')}</select>`;
  return`<div class="list-toolbar"><input type="search" data-input="flt" data-k="q" value="${esc(f.q)}" placeholder="Search issues…">
- ${sel('status','All statuses',[...STATUSES,['notclosed','Not closed'],['overdue','Overdue']])}${sel('priority','All priorities',PRIORITIES)}${sel('category','All trades',uniq(items.map(i=>i.category)))}${sel('location','All locations',uniq(items.map(i=>i.location)))}${sel('assignee','All assignees',uniq(items.map(i=>i.assignee)))}
- <select data-change="flt" data-k="sort" aria-label="Sort">${[['number','Sort: Number'],['newest','Sort: Newest'],['updated','Sort: Recently updated'],['priority','Sort: Priority'],['status','Sort: Status'],['due','Sort: Due date'],['location','Sort: Location']].map(([v,t])=>`<option value="${v}" ${f.sort===v?'selected':''}>${t}</option>`).join('')}</select></div>
+ ${sel('status','All statuses',[...STATUSES,['notclosed','Not closed'],['overdue','Overdue']])}${sel('priority','All priorities',PRIORITIES)}${sel('category','All trades',uniq(items.map(i=>i.category)))}${subs.length||f.subcategory?sel('subcategory','All subcategories',subs.map(x=>[x,subShort(x)])):''}${defs.length||f.defectType?sel('defectType','All defect types',defs):''}${sel('location','All locations',uniq(items.map(i=>i.location)))}${sel('assignee','All assignees',uniq(items.map(i=>i.assignee)))}
+ <select data-change="flt" data-k="sort" aria-label="Sort">${[['number','Sort: Number'],['newest','Sort: Newest'],['updated','Sort: Recently updated'],['priority','Sort: Priority'],['status','Sort: Status'],['due','Sort: Due date'],['location','Sort: Location']].map(([v,t])=>`<option value="${v}" ${f.sort===v?'selected':''}>${t}</option>`).join('')}</select></div>`}
+function itemListHTML(key,items,showAudit){const f=UI.filters[key]||(UI.filters[key]={q:'',status:'',priority:'',category:'',subcategory:'',defectType:'',assignee:'',location:'',sort:'number'});UI.list={key,items,showAudit};
+return listToolbarHTML(f,items)+`
  <div class="card list" id="item-list">${itemRows(applyFilter(items,f))}</div><div class="help" id="item-count">${applyFilter(items,f).length} of ${items.length} issues shown</div>`}
+function refreshToolbar(){if(!UI.list)return;const tb=$('.list-toolbar');if(tb)tb.outerHTML=listToolbarHTML(UI.filters[UI.list.key],UI.list.items)}
+function tradeHTML(items,scopeKey){if(!items.some(i=>i.category))return'';const m=new Map();items.forEach(i=>{const t=i.category||'Unclassified',r=m.get(t)||{n:0,open:0};r.n++;if(i.status!=='Closed')r.open++;m.set(t,r)});
+ const rows=[...m.entries()].sort((x,y)=>(x[0]==='Unclassified')-(y[0]==='Unclassified')||y[1].n-x[1].n||x[0].localeCompare(y[0])),max=Math.max(...rows.map(r=>r[1].n));
+ return`<div class="card trades"><div class="trades-h">Issues by trade</div>${rows.map(([t,r])=>{const clk=scopeKey&&t!=='Unclassified';return`<div class="trade-row${clk?' clk':''}"${clk?` data-act="trade-filter" data-scope="${scopeKey}" data-trade="${esc(t)}"`:''}><span class="tn">${esc(t)}</span><span class="tb"><i style="width:${Math.max(4,Math.round(r.n/max*100))}%"></i></span><span class="tc"><b>${r.n}</b> · ${r.open} open</span></div>`}).join('')}</div>`}
+function clsFieldsHTML(i,all){const T=taxTrades(),inTax=T.includes(i.category),custom=UI.clsOther===i.id,subs=taxSubs(i.category),defs=taxDefects(i.category,i.subcategory);
+ const opt=(v,t,sl)=>`<option value="${esc(v)}" ${sl?'selected':''}>${esc(t)}</option>`,others=uniq([...cats(),...all.map(x=>x.category),i.category]).filter(x=>!T.includes(x));
+ let h=`<label><span>Trade</span><select name="category" data-change="cls-field">${opt('','— Select trade —',!i.category&&!custom)}${T.map(t=>opt(t,t,!custom&&t===i.category)).join('')}${others.length?`<optgroup label="Other trades">${others.map(t=>opt(t,t,!custom&&t===i.category)).join('')}</optgroup>`:''}${opt('__other','Other (type a trade)…',custom)}</select>${custom?`<input name="categoryText" data-change="cls-field" placeholder="Type trade name" autocomplete="off">`:''}</label>`;
+ if(inTax)h+=`<label><span>Subcategory</span><select name="subcategory" data-change="cls-field">${opt('','— Select subcategory —',!i.subcategory)}${subs.map(x=>opt(x,x,x===i.subcategory)).join('')}${i.subcategory&&!subs.includes(i.subcategory)?opt(i.subcategory,i.subcategory,true):''}</select></label>`;
+ else if(i.category)h+=`<label><span>Subcategory</span><input name="subcategory" data-change="cls-field" value="${esc(i.subcategory||'')}" placeholder="Optional"></label>`;
+ else h+=`<label><span>Subcategory</span><select name="subcategory" disabled><option>Select a trade first</option></select></label>`;
+ if(defs.length){const isO=!!i.defectType&&!defs.slice(0,-1).includes(i.defectType);h+=`<label><span>Defect type</span><select name="defectType" data-change="cls-field">${opt('','— Select defect type —',!i.defectType)}${defs.map(x=>opt(x,x,x===TAX_OTHER?isO:x===i.defectType)).join('')}</select>${isO?`<input name="defectText" data-change="cls-field" value="${esc(i.defectType===TAX_OTHER?'':i.defectType)}" placeholder="Describe the defect" autocomplete="off">`:''}</label>`}
+ else if(i.subcategory||(i.category&&!inTax))h+=`<label><span>Defect type</span><input name="defectText" data-change="cls-field" value="${esc(i.defectType||'')}" placeholder="Optional"></label>`;
+ else h+=`<label><span>Defect type</span><select name="defectType" disabled><option>${i.category?'Select a subcategory first':'Select a trade first'}</option></select></label>`;
+ return h}
 function refreshList(){if(!UI.list)return;const f=UI.filters[UI.list.key];const r=applyFilter(UI.list.items,f);$('#item-list').innerHTML=itemRows(r);$('#item-count').textContent=`${r.length} of ${UI.list.items.length} issues shown`;hydrate()}
 
 function viewProject(id){const p=byId('projects',id);if(!p)return notFound();
@@ -798,7 +868,7 @@ function viewProject(id){const p=byId('projects',id);if(!p)return notFound();
  <div class="card pad" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">${logoBox(p.logo,p.name).replace('plogo','plogo" style="width:72px;height:72px;font-size:24px')}
  <div style="flex:1;min-width:220px"><h1 style="margin:0 0 6px;font-size:23px">${esc(p.name)}</h1><dl class="kv">${[['Reference',p.reference],['Client',p.client],['Address',p.address],['Date',fmtDate(p.date)],['Prepared by',p.company],['Last edited',p.updatedBy?fmtDT(p.updatedAt)+' by '+p.updatedBy:'']].filter(x=>x[1]).map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${p.notes?`<p class="muted small" style="white-space:pre-wrap;margin:8px 0 0">${esc(p.notes)}</p>`:''}</div>
  <div class="actions"><button class="btn" data-act="edit-project" data-id="${id}">${ic('edit')}<span class="lbl">Edit</span></button><button class="btn primary" data-act="report" data-type="project" data-id="${id}">${ic('file')}<span class="lbl">Report</span></button><button class="btn danger" data-act="del-project" data-id="${id}">${ic('trash')}</button></div></div>
- ${statsHTML(items,'p-'+id)}
+ ${statsHTML(items,'p-'+id)}${tradeHTML(items,'p-'+id)}
  <div class="section"><h2>Inspections</h2><button class="btn primary sm" data-act="new-audit" data-id="${id}">${ic('plus')} New inspection</button></div>
  ${audits.length?`<div class="card list">${audits.map(a=>{const it=auditItems(a.id),op=it.filter(i=>i.status!=='Closed').length,cl=S.checklists.filter(c=>c.auditId===a.id).length;return`<a class="row" href="#/audit/${a.id}"><div class="thumb" style="background:var(--accl);color:var(--acc)">${ic('clip')}</div><div class="grow"><div class="t">${esc(a.title)}</div><div class="meta"><span>${ic('cal')}${fmtDate(a.date)}</span>${a.inspector?`<span>${ic('user')}${esc(a.inspector)}</span>`:''}${a.weather?`<span>${esc(a.weather)}</span>`:''}${cl?`<span>${cl} checklist${cl>1?'s':''}</span>`:''}</div></div><div class="ir-badges"><span class="badge st-Open">${op} open</span><span class="badge pr-Low">${it.length} total</span></div></a>`}).join('')}</div>`:emptyHTML('No inspections yet','An inspection is a site visit. Add one to start logging issues.')}
  <div class="section"><h2>Drawings & floor plans</h2><label class="btn sm">${ic('upload')} Upload drawing<input type="file" accept="image/*,application/pdf" hidden data-change="upload-drawing" data-id="${id}"></label></div>
@@ -810,7 +880,7 @@ function viewAudit(id,params){const a=byId('audits',id);if(!a)return notFound();
  <div class="page-head"><h1>${esc(a.title)}<span class="sub">${fmtDate(a.date)}${a.inspector?' · Inspector: '+esc(a.inspector):''}${a.weather?' · '+esc(a.weather):''}</span></h1>
  <div class="actions"><button class="btn" data-act="edit-audit" data-id="${id}">${ic('edit')}<span class="lbl">Edit</span></button><button class="btn" data-act="report" data-type="audit" data-id="${id}">${ic('file')}<span class="lbl">Report</span></button><button class="btn danger" data-act="del-audit" data-id="${id}">${ic('trash')}</button><button class="btn primary" data-act="new-item" data-id="${id}">${ic('plus')} Add issue</button></div></div>
  ${a.notes?`<div class="card pad small" style="white-space:pre-wrap">${esc(a.notes)}</div>`:''}
- ${statsHTML(items,'a-'+id)}
+ ${statsHTML(items,'a-'+id)}${tradeHTML(items,'a-'+id)}
  <div class="tabs"><a href="#/audit/${id}" class="${tab==='issues'?'on':''}">Issues (${items.length})</a><a href="#/audit/${id}?tab=checklists" class="${tab==='checklists'?'on':''}">Checklists (${cls.length})</a></div>
  ${tab==='issues'?(items.length?itemListHTML('a-'+id,items,false):emptyHTML('No issues logged','Tap “Add issue” to record a defect, snag or hazard with photos.',`<button class="btn primary" data-act="new-item" data-id="${id}">${ic('plus')} Add issue</button>`)):checklistsHTML(a,cls)}`}
 
@@ -831,13 +901,13 @@ function viewItem(id){const i=byId('items',id);if(!i)return notFound();const a=b
  <label class="full"><span>Description / notes</span><textarea name="description" data-change="item-field" rows="4" placeholder="Describe the issue and the required action…">${esc(i.description)}</textarea></label>
  <label><span>Status</span><select name="status" data-change="item-field">${STATUSES.map(s=>`<option ${s===i.status?'selected':''}>${s}</option>`).join('')}</select></label>
  <label><span>Priority</span><select name="priority" data-change="item-field">${PRIORITIES.map(s=>`<option ${s===i.priority?'selected':''}>${s}</option>`).join('')}</select></label>
+ <div class="full cls-grid" id="cls-block">${clsFieldsHTML(i,all)}</div>
  <label><span>Location</span><input name="location" list="dl-loc" data-change="item-field" value="${esc(i.location)}" placeholder="e.g. Level 2 / Apt 204 / Kitchen"></label>
- <label><span>Category / trade</span><input name="category" list="dl-cat" data-change="item-field" value="${esc(i.category)}" placeholder="e.g. Tiling"></label>
  <label><span>Assignee</span><input name="assignee" list="dl-asg" data-change="item-field" value="${esc(i.assignee)}" placeholder="Person or subcontractor"></label>
  <label><span>Due date</span><input type="date" name="dueDate" data-change="item-field" value="${esc(i.dueDate)}"></label>
  <label><span>Cost estimate (optional)</span><input name="cost" data-change="item-field" value="${esc(i.cost||'')}" placeholder="e.g. AED 450"></label>
  <label><span>Inspection</span><select name="auditId" data-change="item-field">${S.audits.filter(x=>x.projectId===p.id).map(x=>`<option value="${x.id}" ${x.id===i.auditId?'selected':''}>${esc(x.title)}</option>`).join('')}</select></label>
- </form>${dl('dl-loc',all.map(x=>x.location))}${dl('dl-cat',[...cats(),...all.map(x=>x.category)])}${dl('dl-asg',all.map(x=>x.assignee))}<div class="help">Changes are saved automatically.</div></div>
+ </form>${dl('dl-loc',all.map(x=>x.location))}${dl('dl-asg',all.map(x=>x.assignee))}<div class="help">Changes are saved automatically.</div></div>
  <div><div class="card pad"><div class="section" style="margin:0 0 10px"><h2>Drawing pin</h2></div>
  ${dr?`<div class="ph" style="aspect-ratio:1/1;max-width:320px;cursor:pointer" data-act="go" data-href="#/drawing/${dr.id}?focus=${i.id}"><img data-pincrop="${i.id}" alt="" style="object-fit:contain;background:#fff"></div><div class="small" style="margin:8px 0">Pin <b>#${i.number}</b> on <a href="#/drawing/${dr.id}?focus=${i.id}">${esc(dr.name)}</a></div><div class="actions"><button class="btn sm" data-act="place-pin" data-id="${i.id}">Move pin</button><button class="btn sm danger" data-act="unpin" data-id="${i.id}">Remove pin</button></div>`
  :drs.length?`<p class="muted small" style="margin-top:0">Not placed on a drawing yet.</p><button class="btn sm primary" data-act="place-pin" data-id="${i.id}">${ic('pin')} Place on drawing</button>`:`<p class="muted small" style="margin:0">Upload a drawing on the <a href="#/project/${p.id}">project page</a> to pin this issue.</p>`}</div></div></div>
@@ -868,7 +938,7 @@ function viewSettings(){const st=S.settings;onAfter(async()=>{if(navigator.stora
  <label class="full"><span>Company details (address, phone, email – shown on report cover)</span><textarea data-change="setting" name="companyDetails" rows="2">${esc(st.companyDetails||'')}</textarea></label>
  <label><span>Default report theme</span><select data-change="setting" name="reportColor">${Object.entries(THEMES).map(([k,v])=>`<option value="${v}" ${st.reportColor===v?'selected':''}>${k}</option>`).join('')}</select></label>
  <div><label><span>Company logo (used when a project has no logo)</span></label><div class="img-field">${st.logo?`<img src="${esc(st.logo)}" alt="">`:''}<label class="btn sm">${ic('upload')} Choose<input type="file" accept="image/*" hidden data-change="setting-logo"></label>${st.logo?`<button class="btn sm danger" data-act="clear-logo">Remove</button>`:''}</div></div>
- <label class="full"><span>Categories / trades (one per line – suggested when logging issues)</span><textarea data-change="setting" name="categories" rows="6">${esc(cats().join('\n'))}</textarea></label></form></div>
+ <label class="full"><span>Additional trades (one per line – offered under “Other trades” in the issue form)</span><textarea data-change="setting" name="categories" rows="6">${esc(cats().join('\n'))}</textarea></label></form></div>
  <div class="card pad" style="margin-top:16px"><h2 style="margin-top:0;font-size:17px">Backup & restore</h2><p class="muted small">All data (projects, inspections, issues, photos, drawings, templates) is stored locally in this browser (IndexedDB). Export a backup regularly or to move data to another device/browser.</p>
  <div class="actions"><button class="btn primary" data-act="backup">${ic('download')} Export backup (.json)</button><label class="btn">${ic('upload')} Import backup<input type="file" accept="application/json,.json" hidden data-change="restore"></label><button class="btn" data-act="csv-all">${ic('download')} Export all issues (CSV)</button><button class="btn danger" data-act="wipe">${ic('trash')} Delete all data</button></div><p class="help" id="storage"></p></div>
  ${dbxSettingsHTML()}
@@ -893,7 +963,7 @@ const projectFields=()=>[{k:'name',label:'Project name',req:true,full:true},{k:'
 const defaultInspector=()=>localStorage.getItem('sap.inspector')||currentUser().name||'';
 const auditFields=()=>[{k:'title',label:'Inspection title',req:true,full:true,ph:'e.g. Pre-handover inspection'},{k:'date',label:'Date',type:'date'},{k:'inspector',label:'Inspector'},{k:'weather',label:'Weather',type:'select',options:WEATHER},{k:'attendees',label:'Attendees / present'},{k:'notes',label:'Notes / general observations',type:'textarea',full:true},{k:'signature',label:'Inspector signature',type:'signature'}];
 function nextNumber(pid){return projItems(pid).reduce((m,i)=>Math.max(m,i.number||0),0)+1}
-async function newItem(auditId,extra={}){const a=byId('audits',auditId);const it={id:uid(),auditId,projectId:a.projectId,number:nextNumber(a.projectId),title:'',description:'',location:'',category:'',priority:'Medium',status:'Open',assignee:'',dueDate:'',photos:[],pin:null,...extra};await save('items',it);return it}
+async function newItem(auditId,extra={}){const a=byId('audits',auditId);const it={id:uid(),auditId,projectId:a.projectId,number:nextNumber(a.projectId),title:'',description:'',location:'',category:'',subcategory:'',defectType:'',priority:'Medium',status:'Open',assignee:'',dueDate:'',photos:[],pin:null,...extra};await save('items',it);return it}
 async function deleteItem(it){for(const ph of it.photos||[])await delPhoto(ph,it.projectId);await remove('items',it.id)}
 async function deleteAudit(a){for(const it of auditItems(a.id))await deleteItem(it);for(const c of S.checklists.filter(c=>c.auditId===a.id))await remove('checklists',c.id);await remove('audits',a.id)}
 async function deleteDrawing(d){for(const it of S.items.filter(i=>i.pin&&i.pin.drawingId===d.id)){it.pin=null;await save('items',it)}await delPhoto(d.imageId,d.projectId);await remove('drawings',d.id)}
@@ -921,7 +991,7 @@ const ACT={
  'edit-audit':async el=>{const a=byId('audits',el.dataset.id);const r=await formModal('Edit inspection',auditFields(),a);if(!r)return;await save('audits',Object.assign(a,r));render()},
  'del-audit':async el=>{const a=byId('audits',el.dataset.id);if(!await confirmBox(`Delete inspection “${a.title}” and all its issues?`))return;await deleteAudit(a);location.hash='#/project/'+a.projectId},
  'new-item':async el=>{const it=await newItem(el.dataset.id);location.hash='#/item/'+it.id;setTimeout(()=>{const t=$('[name=title]');t&&t.focus()},60)},
- 'dup-item':async el=>{const s=byId('items',el.dataset.id);const it=await newItem(s.auditId,{title:s.title+' (copy)',description:s.description,location:s.location,category:s.category,priority:s.priority,assignee:s.assignee,dueDate:s.dueDate});location.hash='#/item/'+it.id},
+ 'dup-item':async el=>{const s=byId('items',el.dataset.id);const it=await newItem(s.auditId,{title:s.title+' (copy)',description:s.description,location:s.location,category:s.category,subcategory:s.subcategory||'',defectType:s.defectType||'',priority:s.priority,assignee:s.assignee,dueDate:s.dueDate});location.hash='#/item/'+it.id},
  'del-item':async el=>{const it=byId('items',el.dataset.id);if(!await confirmBox(`Delete issue #${it.number}?`))return;await deleteItem(it);location.hash='#/audit/'+it.auditId},
  'del-photo':async el=>{if(!await confirmBox('Delete this photo?'))return;const it=byId('items',el.dataset.id);it.photos=it.photos.filter(p=>p!==el.dataset.ph);await delPhoto(el.dataset.ph,it.projectId);await save('items',it);render()},
  'photo-first':async el=>{const it=byId('items',el.dataset.id);it.photos=[el.dataset.ph,...it.photos.filter(p=>p!==el.dataset.ph)];await save('items',it);render()},
@@ -931,6 +1001,7 @@ const ACT={
   if(!d||drs.length>1){if(drs.length===1)d=drs[0];else{const r=await formModal('Choose drawing',[{k:'d',label:'Drawing',type:'select',options:drs.map(x=>x.name),full:true}],{d:d?d.name:drs[0].name},{ok:'Continue'});if(!r)return;d=drs.find(x=>x.name===r.d)}}
   location.hash=`#/drawing/${d.id}?place=${it.id}`},
  unpin:async el=>{const it=byId('items',el.dataset.id);it.pin=null;await save('items',it);render()},
+ 'trade-filter':el=>{const f=UI.filters[el.dataset.scope];if(!f||!UI.list)return;f.category=el.dataset.trade;f.subcategory='';f.defectType='';refreshToolbar();refreshList();$('#item-list').scrollIntoView({behavior:'smooth',block:'start'})},
  'stat-filter':el=>{const f=UI.filters[el.dataset.scope];if(!f||!UI.list)return;f.status=el.dataset.status;const s=$('select[data-k=status]');if(s)s.value=f.status;refreshList();$('#item-list').scrollIntoView({behavior:'smooth',block:'start'})},
  'add-checklist':async el=>{if(!S.templates.length){alertBox('Create a checklist template first (Templates tab).');return}const r=await formModal('Add checklist',[{k:'t',label:'Template',type:'select',options:S.templates.map(t=>t.name),full:true}],{},{ok:'Add'});if(!r)return;const t=S.templates.find(x=>x.name===r.t);
   await save('checklists',{id:uid(),auditId:el.dataset.id,projectId:byId('audits',el.dataset.id).projectId,templateId:t.id,name:t.name,questions:t.questions.map(q=>({...q,id:uid(),answer:'',comment:''}))});location.hash=`#/audit/${el.dataset.id}?tab=checklists`;render()},
@@ -959,7 +1030,13 @@ const CHG={
  'item-field':async el=>{const f=el.closest('form');const it=f&&byId('items',f.dataset.id);if(!it)return;const k=el.name,v=el.value;if(k==='auditId'&&!v)return;it[k]=v.trim?v.trim():v;if(k==='status')it.closedAt=v==='Closed'?Date.now():null;await save('items',it);toast('Saved',1000);if(k==='title'){const h=$('.page-head h1');if(h&&h.firstChild&&h.firstChild.nextSibling)h.firstChild.nextSibling.textContent=it.title||'Untitled issue'}if(k==='auditId')render()},
  'item-photos':el=>{const files=[...el.files];if(files.length)addPhotos(byId('items',el.dataset.id),files)},
  'upload-drawing':el=>{const f=el.files[0];if(f)uploadDrawing(el.dataset.id,f)},
- flt:el=>{const f=UI.filters[UI.list.key];f[el.dataset.k]=el.value;refreshList()},
+ flt:el=>{const f=UI.filters[UI.list.key],k=el.dataset.k;f[k]=el.value;if(k==='category'){f.subcategory='';f.defectType=''}if(k==='subcategory')f.defectType='';if(k==='category'||k==='subcategory')refreshToolbar();refreshList()},
+ 'cls-field':async el=>{const fm=el.closest('form');const it=fm&&byId('items',fm.dataset.id);if(!it)return;const k=el.name,v=(el.value||'').trim();
+  if(k==='category'&&v==='__other'){UI.clsOther=it.id;return clsRefresh(it,'categoryText')}
+  if(k==='category'||k==='categoryText'){UI.clsOther=null;if(v===(it.category||''))return clsRefresh(it);it.category=v;it.subcategory='';it.defectType=''}
+  else if(k==='subcategory'){if(v===(it.subcategory||''))return;it.subcategory=v;it.defectType=''}
+  else if(k==='defectType')it.defectType=v;else if(k==='defectText')it.defectType=v||(taxDefects(it.category,it.subcategory).length?TAX_OTHER:'');else return;
+  await save('items',it);toast('Saved',1000);clsRefresh(it,k==='defectType'&&v===TAX_OTHER?'defectText':null)},
  'cl-comment':async el=>{const c=byId('checklists',el.dataset.cl);c.questions.find(x=>x.id===el.dataset.q).comment=el.value;await save('checklists',c);toast('Saved',900)},
  setting:async el=>{if(el.name==='inspector'){localStorage.setItem('sap.inspector',el.value.trim());toast('Saved',900);return}S.settings[el.name]=el.name==='categories'?el.value.split('\n').map(s=>s.trim()).filter(Boolean):el.value;await saveSettings();toast('Settings saved',1000)},
  'setting-logo':async el=>{const f=el.files[0];if(!f)return;S.settings.logo=(await resizeImage(await fileToDataURL(f),500,'image/png')).data;await saveSettings();render()},
@@ -999,7 +1076,7 @@ async function initViewer(d,params){const vp=$('#viewer'),layer=$('#layer'),img=
   if(!r2)return;if(r2.v==='link'){if(!r2.existing)return toast('Choose an issue to link');const it=byId('items',r2.existing);it.pin=pin;await save('items',it);toast(`Pin #${it.number} placed`);render();return}
   let aid=r2.audit;if(!aid){aid=(await save('audits',{id:uid(),projectId:d.projectId,title:'Inspection 1',date:today(),inspector:defaultInspector()})).id}
   const it=await newItem(aid,{pin});location.hash='#/item/'+it.id}}
-async function pinPopup(id){const it=byId('items',id);const r=await modal({title:`Issue #${it.number}`,backdrop:true,body:`<div style="display:flex;gap:12px">${it.photos&&it.photos[0]?`<div class="thumb" style="width:90px;height:90px"><img data-photo="${it.photos[0]}" alt=""></div>`:''}<div><b>${esc(it.title||'Untitled')}</b><div class="meta" style="margin:4px 0">${esc(it.location||'')} ${it.category?'· '+esc(it.category):''}</div>${prBadge(it.priority)} ${stBadge(it.status)}${it.description?`<p class="small" style="margin:6px 0 0">${esc(it.description.slice(0,200))}</p>`:''}</div></div>`,
+async function pinPopup(id){const it=byId('items',id);const r=await modal({title:`Issue #${it.number}`,backdrop:true,body:`<div style="display:flex;gap:12px">${it.photos&&it.photos[0]?`<div class="thumb" style="width:90px;height:90px"><img data-photo="${it.photos[0]}" alt=""></div>`:''}<div><b>${esc(it.title||'Untitled')}</b><div class="meta" style="margin:4px 0">${esc(it.location||'')} ${clsParts(it).length?'· '+esc(clsParts(it).join(' › ')):''}</div>${prBadge(it.priority)} ${stBadge(it.status)}${it.description?`<p class="small" style="margin:6px 0 0">${esc(it.description.slice(0,200))}</p>`:''}</div></div>`,
  onOpen:el=>hydrate(el),buttons:[{label:'Remove pin',value:'rm',cls:'danger'},{label:'Move pin',value:'mv'},{label:'Open issue',value:'open',cls:'primary'}]});
  if(r==='open')location.hash='#/item/'+id;else if(r==='mv'){UI.viewer.placeId=id;if(!UI.viewer.adding)UI.viewer.toggleAdd();$('#pin-hint').textContent=`Tap the new location for issue #${it.number}.`}else if(r==='rm'){it.pin=null;await save('items',it);render()}}
 
@@ -1039,6 +1116,7 @@ async function drawingCanvas(d,items,{crop=null,maxW=2400}={}){const p=await get
  const s=Math.min(1,maxW/Math.max(sw,sh));const c=document.createElement('canvas');c.width=Math.round(sw*s);c.height=Math.round(sh*s);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
  const r=Math.max(9,Math.max(c.width,c.height)*(crop?.065:.016));
  items.filter(i=>i.pin&&i.pin.drawingId===d.id).forEach(i=>{const px=(i.pin.x*W-sx)*s,py=(i.pin.y*H-sy)*s;if(px<0||py<0||px>c.width||py>c.height)return;drawPin(x,px,py,r,STATUS_COLOR[i.status],i.number,false)});return c}
+function clsRefresh(it,focus){const b=$('#cls-block');if(!b)return;b.innerHTML=clsFieldsHTML(it,projItems(it.projectId));if(focus){const x=b.querySelector(`[name=${focus}]`);if(x)x.focus()}}
 
 /* ===== Reports ===== */
 const hex2rgb=h=>{h=h.replace('#','');return[0,2,4].map(i=>parseInt(h.substr(i,2),16))};
@@ -1093,6 +1171,7 @@ async function generatePDF(d,o,opt={}){const{jsPDF}=window.jspdf;const doc=new j
  const st=[['Total issues',all.length,DARK],['Open',cnt('Open'),[220,38,38]],['In progress',cnt('In Progress'),[217,119,6]],['Closed',cnt('Closed'),[22,163,74]],['Overdue',all.filter(isOver).length,[159,18,57]]];const bw=(PW-2*M-16)/5;
  st.forEach(([l,n,c],k)=>{const x=M+k*(bw+4);doc.setFillColor(246,248,251);doc.setDrawColor(222,228,234);doc.roundedRect(x,y,bw,20,2,2,'FD');font(18,'bold',c);T(String(n),x+bw/2,y+10,{align:'center'});font(7.5,'bold',GREY);T(l.toUpperCase(),x+bw/2,y+16,{align:'center'})});y+=27;
  const op=all.filter(i=>i.status!=='Closed');font(9,'normal',GREY);T(`Open issues by priority:  Critical ${op.filter(i=>i.priority==='Critical').length}  ·  High ${op.filter(i=>i.priority==='High').length}  ·  Medium ${op.filter(i=>i.priority==='Medium').length}  ·  Low ${op.filter(i=>i.priority==='Low').length}${all.length?`   |   ${Math.round(cnt('Closed')/all.length*100)}% complete`:''}`,M,y);y+=6;
+ const trc=tradeCounts(all);if(trc.length){font(9,'normal',GREY);for(const l of doc.splitTextToSize('Issues by trade:  '+trc.map(([t,n])=>`${t} ${n}`).join('  ·  '),PW-2*M)){T(l,M,y);y+=4.6}y+=1.4}
  if(!o.closed&&cnt('Closed'))
   {font(8,'italic',GREY);T(`Closed issues (${cnt('Closed')}) are excluded from this report's issue list.`,M,y);y+=6}
  const notes=[a?a.notes:'',p.notes].filter(Boolean).join('\n\n');if(notes){y+=3;font(8.5,'bold',GREY);T('NOTES',M,y);y+=5;font(9.5,'normal');for(const l of doc.splitTextToSize(notes,PW-2*M)){ensure(5);T(l,M,y);y+=4.4}}
@@ -1100,7 +1179,7 @@ async function generatePDF(d,o,opt={}){const{jsPDF}=window.jspdf;const doc=new j
  /* summary */
  if(o.summary&&items.length){newPage();heading('Summary of issues');const cols=[['#',10],['Issue',44],['Location',26],['Trade',23],['Priority',16],['Status',19],['Assignee',23],['Due',21]];
   const head=()=>{doc.setFillColor(...acc);doc.rect(M,y,PW-2*M,7,'F');font(8,'bold',[255,255,255]);let x=M;cols.forEach(([t,w])=>{T(t,x+1.5,y+4.8);x+=w});y+=7};head();
-  items.forEach((it,ix)=>{font(8,'normal');const v=['#'+it.number,it.title||'Untitled',it.location,it.category,it.priority,it.status,it.assignee,fmtDate(it.dueDate)];const ls=v.map((s,c)=>doc.splitTextToSize(String(s||'–'),cols[c][1]-3).slice(0,3));const h=Math.max(...ls.map(l=>l.length))*3.4+3.2;
+  items.forEach((it,ix)=>{font(8,'normal');const v=['#'+it.number,it.title||'Untitled',it.location,[it.category,it.defectType].filter(Boolean).join('\n'),it.priority,it.status,it.assignee,fmtDate(it.dueDate)];const ls=v.map((s,c)=>doc.splitTextToSize(String(s||'–'),cols[c][1]-3).slice(0,4));const h=Math.max(...ls.map(l=>l.length))*3.4+3.2;
    if(y+h>PH-16){newPage();head()}if(ix%2){doc.setFillColor(246,248,251);doc.rect(M,y,PW-2*M,h,'F')}let x=M;
    ls.forEach((l,c)=>{if(c===4)font(8,'bold',hex2rgb(PRIO_COLOR[it.priority]));else if(c===5)font(8,'bold',hex2rgb(STATUS_COLOR[it.status]));else if(c===7&&isOver(it))font(8,'bold',[190,18,60]);else font(8,c===0?'bold':'normal',c===0?acc:DARK);T(l,x+1.5,y+4.2);x+=cols[c][1]});
    doc.setDrawColor(226,232,240);doc.setLineWidth(.2);doc.line(M,y+h,PW-M,y+h);y+=h})}
@@ -1111,7 +1190,7 @@ async function generatePDF(d,o,opt={}){const{jsPDF}=window.jspdf;const doc=new j
    const sw=chipW(it.status),pw=chipW(it.priority);font(11,'bold',acc);const nt='#'+it.number;T(nt,M+4,y+6.1);const nw=doc.getTextWidth(nt)+2.5;
    font(11,'bold');T(doc.splitTextToSize(it.title||'Untitled issue',PW-2*M-nw-sw-pw-12)[0],M+4+nw,y+6.1);
    chip(it.status,PW-M-2-sw,y+6,STATUS_COLOR[it.status]);chip(it.priority,PW-M-4-sw-pw,y+6,PRIO_COLOR[it.priority]);y+=14;
-   const f=[['Location',it.location],['Category / trade',it.category],['Assignee',it.assignee],['Due date',fmtDate(it.dueDate)+(isOver(it)?' (OVERDUE)':'')],['Status',it.status+(it.status==='Closed'&&it.closedAt?' – '+fmtDate(it.closedAt):'')],['Logged',fmtDT(it.createdAt)]];
+   const f=[['Trade',it.category],['Subcategory',it.subcategory],['Defect type',it.defectType],['Location',it.location],['Assignee',it.assignee],['Due date',fmtDate(it.dueDate)+(isOver(it)?' (OVERDUE)':'')],['Status',it.status+(it.status==='Closed'&&it.closedAt?' – '+fmtDate(it.closedAt):'')],['Logged',fmtDT(it.createdAt)]];
    if(it.cost)f.push(['Cost estimate',it.cost]);if(dr)f.push(['Drawing ref.',`${dr.name} – pin #${it.number}`]);if(!a){const au=byId('audits',it.auditId);if(au)f.push(['Inspection',au.title])}
    const cw=(PW-2*M)/3;for(let k=0;k<f.length;k+=3){ensure(11);let rh=9;for(let j=0;j<3&&k+j<f.length;j++){const[l,v]=f[k+j];font(7,'bold',GREY);T(l.toUpperCase(),M+j*cw,y);font(9.5,'normal',v&&v.includes('OVERDUE')?[190,18,60]:DARK);const ls=doc.splitTextToSize(v||'–',cw-4).slice(0,2);T(ls,M+j*cw,y+4.3);rh=Math.max(rh,4.3+ls.length*4+1.8)}y+=rh}
    if(it.description){ensure(11);font(7,'bold',GREY);T('DESCRIPTION',M,y);y+=4.5;font(9.5,'normal');for(const l of doc.splitTextToSize(it.description,PW-2*M)){ensure(5);T(l,M,y);y+=4.3}y+=2}
@@ -1153,11 +1232,11 @@ table{width:100%;border-collapse:collapse;font-size:9pt}th{background:${acc};col
 .fields{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 12px;margin:8px 0}.fields small{display:block;color:#778;font-size:7.5pt;font-weight:bold;text-transform:uppercase}.imgs{display:grid;grid-template-columns:repeat(${per},1fr);gap:8px}.imgs figure{margin:0}.imgs img{width:100%;aspect-ratio:4/3;object-fit:contain;background:#f1f5f9;display:block}figcaption{font-size:8pt;color:#667}
 .chip{color:#fff;border-radius:4px;padding:1px 7px;font-size:8.5pt;margin-left:4px;white-space:nowrap}.pb{break-before:page;page-break-before:always}.dw img{max-width:100%;max-height:235mm;display:block;margin:auto;border:1px solid #ccd}.desc{white-space:pre-wrap}.sec td{background:${lt}!important;font-weight:bold;color:${acc}}
 </style></head><body><div class="cover"><div><div style="font-weight:bold;letter-spacing:.06em">${esc((o.subtitle||'').toUpperCase())}</div><h1>${esc(o.title)}</h1><div>${esc([p.client,p.address].filter(Boolean).join(' · '))}</div></div>${logo?`<div class="lg"><img src="${logo}"></div>`:''}</div>
-<dl>${kv.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl><div class="stats"><div><b>${all.length}</b>Total</div><div><b style="color:#dc2626">${cnt('Open')}</b>Open</div><div><b style="color:#d97706">${cnt('In Progress')}</b>In progress</div><div><b style="color:#16a34a">${cnt('Closed')}</b>Closed</div><div><b style="color:#9f1239">${all.filter(isOver).length}</b>Overdue</div></div>${[a?a.notes:'',p.notes].filter(Boolean).map(n=>`<p class="desc">${esc(n)}</p>`).join('')}`;
- const items=d.items;if(o.summary&&items.length)h+=`<h2 class="pb">Summary of issues</h2><table><tr><th>#</th><th>Issue</th><th>Location</th><th>Trade</th><th>Priority</th><th>Status</th><th>Assignee</th><th>Due</th></tr>${items.map(i=>`<tr><td><b>#${i.number}</b></td><td>${esc(i.title)}</td><td>${esc(i.location)}</td><td>${esc(i.category)}</td><td style="color:${PRIO_COLOR[i.priority]};font-weight:bold">${i.priority}</td><td style="color:${STATUS_COLOR[i.status]};font-weight:bold">${i.status}</td><td>${esc(i.assignee)}</td><td ${isOver(i)?'style="color:#be123c;font-weight:bold"':''}>${fmtDate(i.dueDate)}</td></tr>`).join('')}</table>`;
+<dl>${kv.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl><div class="stats"><div><b>${all.length}</b>Total</div><div><b style="color:#dc2626">${cnt('Open')}</b>Open</div><div><b style="color:#d97706">${cnt('In Progress')}</b>In progress</div><div><b style="color:#16a34a">${cnt('Closed')}</b>Closed</div><div><b style="color:#9f1239">${all.filter(isOver).length}</b>Overdue</div></div>${tradeCounts(all).length?`<p style="font-size:9pt;color:#556"><b>Issues by trade:</b> ${tradeCounts(all).map(([t,n])=>esc(t)+' '+n).join(' · ')}</p>`:''}${[a?a.notes:'',p.notes].filter(Boolean).map(n=>`<p class="desc">${esc(n)}</p>`).join('')}`;
+ const items=d.items;if(o.summary&&items.length)h+=`<h2 class="pb">Summary of issues</h2><table><tr><th>#</th><th>Issue</th><th>Location</th><th>Trade</th><th>Priority</th><th>Status</th><th>Assignee</th><th>Due</th></tr>${items.map(i=>`<tr><td><b>#${i.number}</b></td><td>${esc(i.title)}</td><td>${esc(i.location)}</td><td>${esc(i.category)}${i.defectType?`<br><small>${esc(i.defectType)}</small>`:''}</td><td style="color:${PRIO_COLOR[i.priority]};font-weight:bold">${i.priority}</td><td style="color:${STATUS_COLOR[i.status]};font-weight:bold">${i.status}</td><td>${esc(i.assignee)}</td><td ${isOver(i)?'style="color:#be123c;font-weight:bold"':''}>${fmtDate(i.dueDate)}</td></tr>`).join('')}</table>`;
  if(items.length){h+=`<h2 class="pb">Issue details</h2>`;for(const i of items){const dr=i.pin&&byId('drawings',i.pin.drawingId);let im='';if(o.photos)for(const[n,id]of(i.photos||[]).entries()){const ph=await getPhoto(id);if(ph)im+=`<figure><img src="${ph.data}"><figcaption>Photo ${n+1}</figcaption></figure>`}
   if(o.pinrefs&&dr){const c=await drawingCanvas(dr,[i],{crop:i.pin,maxW:600});im+=`<figure><img src="${c.toDataURL('image/jpeg',.85)}"><figcaption>Location: ${esc(dr.name)}</figcaption></figure>`}
-  h+=`<div class="item"><div class="ih"><span><span class="n">#${i.number}</span> ${esc(i.title||'Untitled issue')}</span><span><span class="chip" style="background:${PRIO_COLOR[i.priority]}">${i.priority}</span><span class="chip" style="background:${STATUS_COLOR[i.status]}">${i.status}</span></span></div><div class="fields">${[['Location',i.location],['Category / trade',i.category],['Assignee',i.assignee],['Due date',fmtDate(i.dueDate)+(isOver(i)?' (OVERDUE)':'')],['Logged',fmtDT(i.createdAt)],['Drawing ref.',dr?dr.name+' – pin #'+i.number:''],['Cost',i.cost]].filter(x=>x[1]).map(([k,v])=>`<div><small>${k}</small>${esc(v)}</div>`).join('')}</div>${i.description?`<div class="desc">${esc(i.description)}</div>`:''}${im?`<div class="imgs" style="margin-top:8px">${im}</div>`:''}</div>`}}
+  h+=`<div class="item"><div class="ih"><span><span class="n">#${i.number}</span> ${esc(i.title||'Untitled issue')}</span><span><span class="chip" style="background:${PRIO_COLOR[i.priority]}">${i.priority}</span><span class="chip" style="background:${STATUS_COLOR[i.status]}">${i.status}</span></span></div><div class="fields">${[['Trade',i.category],['Subcategory',i.subcategory],['Defect type',i.defectType],['Location',i.location],['Assignee',i.assignee],['Due date',fmtDate(i.dueDate)+(isOver(i)?' (OVERDUE)':'')],['Logged',fmtDT(i.createdAt)],['Drawing ref.',dr?dr.name+' – pin #'+i.number:''],['Cost',i.cost]].filter(x=>x[1]).map(([k,v])=>`<div><small>${k}</small>${esc(v)}</div>`).join('')}</div>${i.description?`<div class="desc">${esc(i.description)}</div>`:''}${im?`<div class="imgs" style="margin-top:8px">${im}</div>`:''}</div>`}}
  if(o.checklists&&d.checklists.length){h+=`<h2 class="pb">Checklists</h2>`;for(const c of d.checklists)h+=`<h3>${esc(c.name)}</h3><table><tr><th>Question</th><th style="width:60px">Answer</th><th>Comment</th></tr>${c.questions.map(q=>q.section?`<tr class="sec"><td colspan="3">${esc(q.text)}</td></tr>`:`<tr><td>${esc(q.text)}</td><td style="font-weight:bold;color:${{yes:'#16a34a',no:'#dc2626',na:'#64748b'}[q.answer]||'#999'}">${{yes:'YES',no:'NO',na:'N/A'}[q.answer]||'–'}</td><td>${esc(q.comment||'')}</td></tr>`).join('')}</table>`}
  if(o.drawings)for(const dr of d.drawings){const pinned=items.filter(i=>i.pin&&i.pin.drawingId===dr.id);if(!pinned.length)continue;const c=await drawingCanvas(dr,items,{maxW:2000});h+=`<div class="pb dw"><h2>Drawing: ${esc(dr.name)}</h2><img src="${c.toDataURL('image/jpeg',.85)}"><p style="font-size:9pt">${pinned.map(i=>`<b style="color:${STATUS_COLOR[i.status]}">#${i.number}</b> ${esc(i.title)}`).join(' &nbsp;·&nbsp; ')}</p></div>`}
  const sg=d.audits.filter(x=>x.signature);if(sg.length)h+=`<h2>Sign-off</h2>${sg.map(x=>`<div style="margin-bottom:14px"><img src="${x.signature}" style="height:70px"><div style="border-top:1px solid #999;width:260px;padding-top:4px"><b>${esc(x.inspector||'Inspector')}</b> · ${esc(x.title)} · ${fmtDate(x.date)}</div></div>`).join('')}`;
@@ -1165,8 +1244,9 @@ table{width:100%;border-collapse:collapse;font-size:9pt}th{background:${acc};col
  const fr=document.createElement('div');fr.className='report-frame';fr.innerHTML=`<div class="bar"><b style="flex:1">Print preview – ${esc(o.title)}</b><button class="btn sm primary" data-p>${ic('print')} Print / Save as PDF</button>${Dbx.connected()?`<button class="btn sm" data-dbx>${ic('upload')} Save PDF to Dropbox</button>`:''}<button class="btn sm" data-c>Close</button></div><iframe title="Report"></iframe>`;document.body.appendChild(fr);const ifr=fr.querySelector('iframe');ifr.srcdoc=h;
  fr.querySelector('[data-p]').onclick=()=>ifr.contentWindow.print();fr.querySelector('[data-c]').onclick=()=>fr.remove();const db=fr.querySelector('[data-dbx]');if(db)db.onclick=async()=>{const dn=busy('Generating PDF for Dropbox…');try{const doc=await generatePDF(d,o,{noDownload:true});dn();await Sync.uploadReport(doc.output('blob'),d,o)}catch(e){alertBox('Failed: '+e.message)}finally{dn()}}}finally{done()}}
 
-function csvBlob(items){const cols=['Project','Inspection','Number','Title','Description','Location','Category','Priority','Status','Assignee','Due date','Overdue','Cost','Drawing','Pin X (%)','Pin Y (%)','Photos','Created','Updated','Closed'];const q=v=>{v=String(v??'');return/[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};const iso=t=>t?new Date(t).toISOString():'';
- const rows=items.map(i=>{const p=byId('projects',i.projectId),a=byId('audits',i.auditId),dr=i.pin&&byId('drawings',i.pin.drawingId);return[p&&p.name,a&&a.title,i.number,i.title,i.description,i.location,i.category,i.priority,i.status,i.assignee,i.dueDate,isOver(i)?'Yes':'No',i.cost,dr&&dr.name,dr?(i.pin.x*100).toFixed(1):'',dr?(i.pin.y*100).toFixed(1):'',(i.photos||[]).length,iso(i.createdAt),iso(i.updatedAt),iso(i.closedAt)]});
+const tradeCounts=items=>{const c={};items.forEach(i=>{if(i.category)c[i.category]=(c[i.category]||0)+1});return Object.entries(c).sort((x,y)=>y[1]-x[1]||x[0].localeCompare(y[0]))};
+function csvBlob(items){const cols=['Project','Inspection','Number','Title','Description','Location','Trade','Subcategory','Defect type','Priority','Status','Assignee','Due date','Overdue','Cost','Drawing','Pin X (%)','Pin Y (%)','Photos','Created','Updated','Closed'];const q=v=>{v=String(v??'');return/[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};const iso=t=>t?new Date(t).toISOString():'';
+ const rows=items.map(i=>{const p=byId('projects',i.projectId),a=byId('audits',i.auditId),dr=i.pin&&byId('drawings',i.pin.drawingId);return[p&&p.name,a&&a.title,i.number,i.title,i.description,i.location,i.category,i.subcategory,i.defectType,i.priority,i.status,i.assignee,i.dueDate,isOver(i)?'Yes':'No',i.cost,dr&&dr.name,dr?(i.pin.x*100).toFixed(1):'',dr?(i.pin.y*100).toFixed(1):'',(i.photos||[]).length,iso(i.createdAt),iso(i.updatedAt),iso(i.closedAt)]});
  return new Blob(['\ufeff'+[cols,...rows].map(r=>r.map(q).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'})}
 
 /* ===== Backup ===== */
