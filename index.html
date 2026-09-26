@@ -963,7 +963,7 @@ const CHG={
  'cl-comment':async el=>{const c=byId('checklists',el.dataset.cl);c.questions.find(x=>x.id===el.dataset.q).comment=el.value;await save('checklists',c);toast('Saved',900)},
  setting:async el=>{if(el.name==='inspector'){localStorage.setItem('sap.inspector',el.value.trim());toast('Saved',900);return}S.settings[el.name]=el.name==='categories'?el.value.split('\n').map(s=>s.trim()).filter(Boolean):el.value;await saveSettings();toast('Settings saved',1000)},
  'setting-logo':async el=>{const f=el.files[0];if(!f)return;S.settings.logo=(await resizeImage(await fileToDataURL(f),500,'image/png')).data;await saveSettings();render()},
- 'dbx-key':el=>{const v=el.value.trim();if(v)localStorage.setItem('sap.dbx.key',v);else localStorage.removeItem('sap.dbx.key');toast('App key saved',1200);render()},
+ 'dbx-key':el=>{const v=el.value.trim();if(v)localStorage.setItem('sap.dbx.keyOverride',v);else localStorage.removeItem('sap.dbx.keyOverride');toast('App key saved',1200);render()},
  'dbx-opt':el=>{Dbx.setPref(el.name,el.checked);toast('Saved',900);if(el.checked)Sync.schedule(500)},
  restore:el=>{const f=el.files[0];if(f)importBackup(f);el.value=''}};
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el||el.closest('.modal-back'))return;if(el.tagName==='BUTTON'||el.tagName==='A')e.preventDefault();const f=ACT[el.dataset.act];if(f)Promise.resolve(f(el,e)).catch(err=>{console.error(err);alertBox('Error: '+err.message)})});
@@ -1195,8 +1195,9 @@ const dbxName=s=>String(s||'Untitled').replace(/[\\/:?*"<>|\u0000-\u001f]+/g,'-'
 const blobToDataURL=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(b)});
 const dataURLToBlob=async d=>(await fetch(d)).blob();
 const rootName=()=>DROPBOX_ROOT_FOLDER.replace(/\/+$/,'').split('/').pop();
+try{if(localStorage.getItem('sap.dbx.key')){localStorage.removeItem('sap.dbx.key');localStorage.removeItem('sap.dbx.tok');localStorage.removeItem('sap.dbx.loc')}}catch(e){}
 const Dbx={loc:null,
- key(){return localStorage.getItem('sap.dbx.key')||(DROPBOX_APP_KEY!==KEY_PLACEHOLDER?DROPBOX_APP_KEY:'')},
+ key(){return localStorage.getItem('sap.dbx.keyOverride')||(DROPBOX_APP_KEY!==KEY_PLACEHOLDER?DROPBOX_APP_KEY:'')},
  configured(){return!!this.key()},
  tok(){try{return JSON.parse(localStorage.getItem('sap.dbx.tok')||'null')}catch(e){return null}},
  setTok(t){if(t)localStorage.setItem('sap.dbx.tok',JSON.stringify(t));else localStorage.removeItem('sap.dbx.tok')},
@@ -1380,7 +1381,7 @@ function dbxSettingsHTML(){const t=Dbx.tok(),con=Dbx.connected(),a=t&&t.account|
   ${Sync.state==='noaccess'?`<div class="hint" style="background:#fef2f2;border-color:#fecaca;color:#991b1b;margin-bottom:10px">${esc(Sync.msg||NOACCESS_MSG)}</div>`:''}
   <div class="actions"><button class="btn primary" data-act="dbx-sync">Sync now</button><button class="btn danger" data-act="dbx-disconnect">Disconnect</button></div>`
  :`<p class="muted small" style="margin-top:0">Sign in with your <b>company Dropbox account</b> to share projects, issues, photos and reports with your team. Your data syncs automatically, and PDF reports are saved to the company folder.</p><div class="actions"><button class="btn primary" data-act="dbx-connect">Connect Dropbox</button></div>`}</div>`}
-function viewDbxAdmin(){const t=Dbx.tok(),loc=Dbx.loc||JSON.parse(localStorage.getItem('sap.dbx.loc')||'null'),lk=localStorage.getItem('sap.dbx.key')||'';
+function viewDbxAdmin(){const t=Dbx.tok(),loc=Dbx.loc||JSON.parse(localStorage.getItem('sap.dbx.loc')||'null'),lk=localStorage.getItem('sap.dbx.keyOverride')||'';
  const row=(k,v)=>`<dt>${esc(k)}</dt><dd style="word-break:break-all">${v}</dd>`;const code=v=>`<code>${esc(v==null||v===''?'—':typeof v==='string'?v:JSON.stringify(v))}</code>`;
  return`${crumbs([['Settings','#/settings'],['Dropbox admin / debug']])}<div class="page-head"><h1>Dropbox admin / debug<span class="sub">Hidden troubleshooting page (#dbx-admin). Not linked in the app.</span></h1></div>
  <div class="card pad"><dl class="kv">${row('Built-in App key',code(DROPBOX_APP_KEY===KEY_PLACEHOLDER?'(placeholder – not configured)':DROPBOX_APP_KEY))}${row('Override App key (this device)',code(lk))}${row('Effective App key',code(Dbx.key()))}
